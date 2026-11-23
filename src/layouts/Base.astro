@@ -30,7 +30,7 @@ const podcast = await getPodcast();
     <link rel="canonical" href={canonical} />
     <link rel="icon" href={url('favicon.svg')} type="image/svg+xml" />
     <link rel="sitemap" href={url('sitemap-index.xml')} />
-    <meta name="theme-color" content="#0f0f12" />
+    <meta name="theme-color" content="#0d0d0f" />
 
     <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="Spæll" />
@@ -103,7 +103,7 @@ const podcast = await getPodcast();
 
 <style>
   .site-header {
-    border-bottom: 1px solid var(--border);
+    border-bottom: 2px solid var(--red);
     background: color-mix(in srgb, var(--bg) 85%, transparent);
     backdrop-filter: blur(10px);
     position: sticky; top: 0; z-index: 10;

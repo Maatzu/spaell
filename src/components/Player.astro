@@ -164,7 +164,7 @@
     padding: 10px max(16px, calc((100% - var(--max)) / 2));
     background: color-mix(in srgb, var(--surface) 94%, transparent);
     backdrop-filter: blur(12px);
-    border-top: 1px solid var(--border);
+    border-top: 2px solid var(--red);
   }
   .player[hidden] { display: none; }
   .cover img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
@@ -182,8 +182,8 @@
     font-size: 0.85rem; font-weight: 600; color: var(--muted);
   }
   .controls button:hover { color: var(--text); background: var(--surface-2); }
-  .controls .toggle { background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; width: 44px; height: 44px; }
-  .controls .toggle:hover { background: var(--accent); filter: brightness(1.08); color: var(--accent-ink); }
+  .controls .toggle { background: var(--red); color: var(--accent-ink); display: grid; place-items: center; width: 44px; height: 44px; }
+  .controls .toggle:hover { background: #e0000c; color: var(--accent-ink); }
   .toggle svg { fill: currentColor; }
   .icon-pause, .is-playing .icon-play { display: none; }
   .is-playing .icon-pause { display: inline; }
