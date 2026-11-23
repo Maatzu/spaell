@@ -123,6 +123,13 @@ const jsonLd = {
     });
   }
 
+  function clearCardNames(cards: HTMLElement[]) {
+    cards.forEach((card) => {
+      card.style.viewTransitionName = '';
+      card.style.removeProperty('view-transition-class');
+    });
+  }
+
   let current: ViewTransition | undefined;
 
   function animate(cards: HTMLElement[], update: () => void) {
@@ -132,16 +139,12 @@ const jsonLd = {
       update();
       nameVisibleCards(cards);
     }, 'filter');
-    if (!transition) return;
+    if (!transition) return clearCardNames(cards);
     current = transition;
     // En ny overgang avbryter den forrige; da skal ikke den gamle rydde bort navnene.
     transition.ready.catch(() => {});
     transition.finished.finally(() => {
-      if (current !== transition) return;
-      cards.forEach((card) => {
-        card.style.viewTransitionName = '';
-        card.style.removeProperty('view-transition-class');
-      });
+      if (current === transition) clearCardNames(cards);
     });
   }
 

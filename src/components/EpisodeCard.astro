@@ -1,8 +1,9 @@
 ---
 import { Image } from 'astro:assets';
+import PlayPauseIcon from './PlayPauseIcon.astro';
 import type { Episode } from '../lib/feed';
-import { TYPE_LABEL, formatDate, formatDuration, sizedImage } from '../lib/feed';
-import { url } from '../lib/links';
+import { episodeLabel, formatDate, formatDuration, sizedImage } from '../lib/format';
+import { episodeUrl } from '../lib/links';
 import { playData } from '../lib/play';
 
 interface Props {
@@ -13,10 +14,11 @@ interface Props {
 
 const { episode, eager = false } = Astro.props;
 const search = `${episode.fullTitle} ${episode.text} ${Object.values(episode.tags).flat().join(' ')}`.toLowerCase();
-const href = url(`episode/${episode.slug}/`);
+// Nummererte episoder får en nøytral badge; de andre farges etter type.
+const badgeClass = episode.number !== null ? 'badge' : `badge badge-${episode.type}`;
 ---
 
-<li class="card" data-search={search} data-year={episode.year} data-type={episode.type} data-date={episode.date}>
+<li class="card" data-search={search} data-year={episode.year} data-type={episode.type}>
   <button
     type="button"
     class="cover"
@@ -25,12 +27,12 @@ const href = url(`episode/${episode.slug}/`);
   >
     <Image src={sizedImage(episode.image, 'Medium')} alt="" width={400} height={400} widths={[200, 400]} sizes="(max-width: 420px) 50vw, 200px" loading={eager ? 'eager' : 'lazy'} />
     <span class="play" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="26" height="26"><path class="icon-play" d="M8 5v14l11-7z" /><path class="icon-pause" d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+      <PlayPauseIcon size={26} />
     </span>
   </button>
-  <a class="body" href={href}>
+  <a class="body" href={episodeUrl(episode)}>
     <span class="tags">
-      {episode.number !== null ? <span class="badge">#{episode.number}</span> : <span class={`badge badge-${episode.type}`}>{TYPE_LABEL[episode.type]}</span>}
+      <span class={badgeClass}>{episodeLabel(episode)}</span>
       <span class="meta">{formatDuration(episode.duration)}</span>
     </span>
     <h3>{episode.title}</h3>
@@ -55,15 +57,12 @@ const href = url(`episode/${episode.slug}/`);
     background: var(--red); color: #fff; box-shadow: 0 6px 20px rgb(0 0 0 / 0.5);
     opacity: 0; scale: 0.85; transition: opacity 0.15s ease, scale 0.15s ease;
   }
-  .play svg { fill: currentColor; }
-  .icon-pause, .is-playing .icon-play { display: none; }
-  .is-playing .icon-pause { display: inline; }
   .cover:hover img, .cover:focus-visible img, .cover.is-playing img { filter: brightness(0.7); }
   .cover:hover .play, .cover:focus-visible .play, .cover.is-playing .play { opacity: 1; scale: 1; }
   /* Uten hover (mobil) vises en liten play-knapp i hjørnet hele tiden. */
   @media (hover: none) {
     .play { opacity: 1; scale: 1; inset: auto 8px 8px auto; width: 40px; height: 40px; }
-    .play svg { width: 20px; height: 20px; }
+    .play :global(svg) { width: 20px; height: 20px; }
   }
 
   .body {
