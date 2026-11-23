@@ -32,9 +32,8 @@ const podcast = await getPodcast();
     <link rel="sitemap" href={url('sitemap-index.xml')} />
     <meta name="theme-color" content="#0d0d0f" />
     <script is:inline>
-      // Setter tema før siden tegnes, og på nytt etter hvert sidebytte i ClientRouter.
+      // Setter tema før siden tegnes, og på nytt etter hvert sidebytte i ClientRouter. Mørkt er standard.
       (() => {
-        const media = matchMedia('(prefers-color-scheme: light)');
         const stored = () => {
           try {
             return localStorage.getItem('spaell:theme');
@@ -43,12 +42,11 @@ const podcast = await getPodcast();
           }
         };
         const apply = () => {
-          const theme = stored() ?? (media.matches ? 'light' : 'dark');
+          const theme = stored() === 'light' ? 'light' : 'dark';
           document.documentElement.dataset.theme = theme;
           document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'light' ? '#f4f4f6' : '#0d0d0f');
         };
         apply();
-        media.addEventListener('change', apply);
         document.addEventListener('astro:after-swap', apply);
         // Temaet tones over til det nye.
         window.toggleTheme = () => {

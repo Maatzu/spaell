@@ -3,6 +3,7 @@ import Base from '../../layouts/Base.astro';
 import PlayButton from '../../components/PlayButton.astro';
 import { getPodcast, formatDate, formatDuration, formatTimestamp, sizedImage, TYPE_LABEL, type Episode } from '../../lib/feed';
 import { url } from '../../lib/links';
+import { playData } from '../../lib/play';
 
 export async function getStaticPaths() {
   const { episodes } = await getPodcast();
@@ -67,12 +68,8 @@ const jsonLd = {
                 <li>
                   <button
                     type="button"
-                    data-play={episode.id}
+                    {...playData(episode)}
                     data-start={c.start}
-                    data-src={episode.audioUrl}
-                    data-title={episode.fullTitle}
-                    data-image={sizedImage(episode.image, 'Small')}
-                    data-href={url(`episode/${episode.slug}/`)}
                   >
                     <span class="ts">{formatTimestamp(c.start)}</span>
                     {c.title}

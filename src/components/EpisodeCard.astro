@@ -2,6 +2,7 @@
 import type { Episode } from '../lib/feed';
 import { TYPE_LABEL, formatDate, formatDuration, sizedImage } from '../lib/feed';
 import { url } from '../lib/links';
+import { playData } from '../lib/play';
 
 interface Props {
   episode: Episode;
@@ -16,11 +17,7 @@ const href = url(`episode/${episode.slug}/`);
   <button
     type="button"
     class="cover"
-    data-play={episode.id}
-    data-src={episode.audioUrl}
-    data-title={episode.fullTitle}
-    data-image={sizedImage(episode.image, 'Small')}
-    data-href={href}
+    {...playData(episode)}
     aria-label={`Spill av ${episode.fullTitle}`}
   >
     <img src={sizedImage(episode.image, 'Medium')} alt="" width="400" height="400" loading="lazy" decoding="async" />

@@ -79,6 +79,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .btn:hover { background: #e0000c; }
 .btn-ghost { background: var(--surface-2); color: var(--text); }
+.btn-ghost:hover { color: var(--accent-ink); }
 
 .badge {
   display: inline-block; padding: 2px 8px; border-radius: 999px;

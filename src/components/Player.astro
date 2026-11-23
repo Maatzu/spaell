@@ -2,7 +2,8 @@
 /*
  * Avspilleren ligger nederst og overlever sidebytter (transition:persist).
  * Alle elementer med data-play starter en episode:
- *   data-play="<id>" data-src data-title data-image data-href [data-start=sekunder]
+ *   data-play="<id>" data-src data-title data-image data-href data-duration [data-chapters=JSON] [data-start=sekunder]
+ * Attributtene lages av playData() i src/lib/play.ts.
  */
 ---
 
@@ -10,10 +11,16 @@
   <audio preload="none"></audio>
   <a class="cover" data-link><img alt="" width="56" height="56" /></a>
   <div class="info">
-    <a class="title" data-link></a>
+    <div class="heading">
+      <a class="title" data-link></a>
+      <span class="chapter" data-chapter></span>
+    </div>
     <div class="scrub">
       <span class="time" data-current>0:00</span>
-      <input type="range" min="0" max="0" step="1" value="0" aria-label="Posisjon i episoden" />
+      <div class="track">
+        <input type="range" min="0" max="0" step="1" value="0" aria-label="Posisjon i episoden" />
+        <div class="markers" data-markers aria-hidden="true"></div>
+      </div>
       <span class="time" data-duration>0:00</span>
     </div>
   </div>
@@ -24,6 +31,12 @@
     </button>
     <button type="button" data-skip="30" aria-label="Spol 30 sekunder frem">+30</button>
     <button type="button" class="speed" data-speed aria-label="Avspillingshastighet">1×</button>
+    <div class="chapters-menu">
+      <button type="button" class="chapters-toggle" data-chapters-toggle aria-label="Kapitler" aria-expanded="false" aria-controls="player-chapters" hidden>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+      </button>
+      <ol class="chapter-list" id="player-chapters" data-chapter-list hidden></ol>
+    </div>
   </div>
 </div>
 
@@ -31,7 +44,8 @@
   const STORAGE_PREFIX = 'spaell:';
   const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 
-  type Track = { id: string; src: string; title: string; image: string; href: string };
+  type Chapter = { start: number; title: string };
+  type Track = { id: string; src: string; title: string; image: string; href: string; duration: number; chapters: Chapter[] };
 
   const store = {
     get<T>(key: string): T | null {
@@ -56,8 +70,13 @@
   const total = root.querySelector<HTMLElement>('[data-duration]')!;
   const toggle = root.querySelector<HTMLButtonElement>('[data-toggle]')!;
   const speedBtn = root.querySelector<HTMLButtonElement>('[data-speed]')!;
+  const chapterLabel = root.querySelector<HTMLElement>('[data-chapter]')!;
+  const markers = root.querySelector<HTMLElement>('[data-markers]')!;
+  const chaptersToggle = root.querySelector<HTMLButtonElement>('[data-chapters-toggle]')!;
+  const chapterList = root.querySelector<HTMLOListElement>('[data-chapter-list]')!;
   let track: Track | null = null;
   let lastSaved = 0;
+  let activeChapter = -1;
 
   const fmt = (s: number) => {
     s = Math.floor(s || 0);
@@ -71,6 +90,59 @@
     if (track) store.set(`pos:${track.id}`, Math.floor(audio.currentTime));
   }
 
+  function renderChapters() {
+    const chapters = track?.chapters ?? [];
+    chaptersToggle.hidden = chapters.length === 0;
+    setChapterListOpen(false);
+    chapterList.replaceChildren(
+      ...chapters.map((c, i) => {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.index = String(i);
+        const ts = document.createElement('span');
+        ts.className = 'ts';
+        ts.textContent = fmt(c.start);
+        btn.append(ts, c.title);
+        li.append(btn);
+        return li;
+      }),
+    );
+    renderMarkers();
+    activeChapter = -1;
+    updateChapter();
+  }
+
+  function renderMarkers() {
+    const chapters = track?.chapters ?? [];
+    // Før lyden er lastet bruker vi varigheten fra feeden.
+    const duration = audio.duration || track?.duration || 0;
+    markers.replaceChildren(
+      ...(duration > 0 ? chapters.slice(1) : []).map((c) => {
+        const tick = document.createElement('span');
+        tick.style.left = `${(c.start / duration) * 100}%`;
+        return tick;
+      }),
+    );
+  }
+
+  function updateChapter(time = audio.currentTime) {
+    const chapters = track?.chapters ?? [];
+    let index = -1;
+    for (let i = 0; i < chapters.length; i++) if (chapters[i].start <= time) index = i;
+    if (index === activeChapter) return;
+    activeChapter = index;
+    // Første kapittel heter ofte det samme som episoden; da viser vi det ikke to ganger.
+    const title = index >= 0 ? chapters[index].title : '';
+    chapterLabel.textContent = title === track?.title ? '' : title;
+    chapterList.querySelectorAll('button').forEach((b, i) => b.classList.toggle('is-active', i === index));
+  }
+
+  function setChapterListOpen(open: boolean) {
+    chapterList.hidden = !open;
+    chaptersToggle.setAttribute('aria-expanded', String(open));
+  }
+
   function load(next: Track, start?: number) {
     if (track?.id !== next.id) {
       savePosition();
@@ -80,9 +152,15 @@
       root.querySelector('img')!.src = next.image;
       root.querySelectorAll<HTMLAnchorElement>('[data-link]').forEach((a) => (a.href = next.href));
       root.querySelector('.title')!.textContent = next.title;
+      range.max = String(next.duration);
+      total.textContent = fmt(next.duration);
+      renderChapters();
       root.hidden = false;
       document.documentElement.style.setProperty('--player-h', `${root.offsetHeight}px`);
       const resumeAt = start ?? store.get<number>(`pos:${next.id}`) ?? 0;
+      range.value = String(resumeAt);
+      current.textContent = fmt(resumeAt);
+      updateChapter(resumeAt);
       audio.addEventListener('loadedmetadata', () => (audio.currentTime = resumeAt), { once: true });
     } else if (start !== undefined) {
       audio.currentTime = start;
@@ -111,7 +189,8 @@
       audio.paused ? audio.play() : audio.pause();
       return;
     }
-    load({ id: d.play!, src: d.src!, title: d.title!, image: d.image!, href: d.href! }, start);
+    const chapters: Chapter[] = d.chapters ? JSON.parse(d.chapters) : [];
+    load({ id: d.play!, src: d.src!, title: d.title!, image: d.image!, href: d.href!, duration: Number(d.duration) || 0, chapters }, start);
     audio.play();
   });
 
@@ -127,6 +206,24 @@
   });
   range.addEventListener('input', () => (audio.currentTime = Number(range.value)));
 
+  chaptersToggle.addEventListener('click', () => setChapterListOpen(chapterList.hidden));
+  chapterList.addEventListener('click', (e) => {
+    const btn = (e.target as Element).closest<HTMLButtonElement>('button[data-index]');
+    if (!btn || !track) return;
+    audio.currentTime = track.chapters[Number(btn.dataset.index)].start;
+    audio.play();
+    setChapterListOpen(false);
+  });
+  document.addEventListener('click', (e) => {
+    if (!chapterList.hidden && !(e.target as Element).closest('.chapters-menu')) setChapterListOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !chapterList.hidden) {
+      setChapterListOpen(false);
+      chaptersToggle.focus();
+    }
+  });
+
   audio.addEventListener('play', () => {
     audio.playbackRate = store.get<number>('speed') ?? 1;
     speedBtn.textContent = `${audio.playbackRate}×`;
@@ -139,10 +236,12 @@
   audio.addEventListener('loadedmetadata', () => {
     range.max = String(Math.floor(audio.duration));
     total.textContent = fmt(audio.duration);
+    renderMarkers();
   });
   audio.addEventListener('timeupdate', () => {
     range.value = String(Math.floor(audio.currentTime));
     current.textContent = fmt(audio.currentTime);
+    updateChapter();
     if (Math.abs(audio.currentTime - lastSaved) > 5) {
       lastSaved = audio.currentTime;
       savePosition();
@@ -154,7 +253,7 @@
 
   // Vis forrige episode (pauset) når siden lastes på nytt.
   const previous = store.get<Track>('current');
-  if (previous) load(previous);
+  if (previous) load({ ...previous, duration: previous.duration ?? 0, chapters: previous.chapters ?? [] });
 </script>
 
 <style>
@@ -174,13 +273,27 @@
   .player[hidden] { display: none; }
   .cover img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
   .info { flex: 1; min-width: 0; }
+  .heading { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
   .title {
-    display: block; color: var(--text); font-weight: 650; text-decoration: none;
+    flex-shrink: 0; max-width: 60%; color: var(--text); font-weight: 650; text-decoration: none;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .chapter {
+    min-width: 0; font-size: 0.85rem; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chapter:not(:empty)::before { content: '·'; margin-right: 10px; }
   .scrub { display: flex; align-items: center; gap: 10px; }
-  .scrub input { flex: 1; accent-color: var(--red); min-width: 0; }
-  .time { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .track { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+  .track input { width: 100%; margin: 0; accent-color: var(--red); }
+  .markers { position: absolute; inset: 0 8px; pointer-events: none; }
+  .markers :global(span) {
+    position: absolute; top: 50%; width: 2px; height: 10px; translate: -1px -50%;
+    background: var(--text); opacity: 0.45; border-radius: 1px;
+  }
+  /* Fast bredde, så ingenting flytter seg når tiden eller hastigheten endres. */
+  .time { width: 4.2em; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  [data-current] { text-align: right; }
   .controls { display: flex; align-items: center; gap: 6px; }
   .controls button {
     border: 0; background: transparent; padding: 8px; border-radius: 999px;
@@ -192,12 +305,33 @@
   .toggle svg { fill: currentColor; }
   .icon-pause, .is-playing .icon-play { display: none; }
   .is-playing .icon-pause { display: inline; }
-  .speed { min-width: 44px; }
+  .speed { width: 3.8em; font-variant-numeric: tabular-nums; }
+
+  .chapters-menu { position: relative; display: flex; }
+  .chapters-toggle { display: grid; place-items: center; }
+  .chapters-toggle[hidden] { display: none; }
+  .chapters-toggle svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .chapters-toggle[aria-expanded='true'] { color: var(--text); background: var(--surface-2); }
+  .chapter-list {
+    position: absolute; right: 0; bottom: calc(100% + 14px); width: min(340px, calc(100vw - 32px));
+    max-height: 50vh; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
+    background: var(--player-bg); border: 1px solid rgb(0 0 0 / 0.15); border-radius: var(--radius);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.4);
+  }
+  .chapter-list[hidden] { display: none; }
+  .chapter-list :global(button) {
+    display: flex; gap: 12px; width: 100%; text-align: left; padding: 8px 10px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 0.9rem;
+  }
+  .chapter-list :global(button:hover) { background: var(--surface-2); }
+  .chapter-list :global(button.is-active) { font-weight: 650; box-shadow: inset 3px 0 0 var(--red); }
+  .chapter-list :global(.ts) { min-width: 4.2em; color: var(--muted); font-variant-numeric: tabular-nums; }
 
   @media (max-width: 640px) {
     .player { flex-wrap: wrap; gap: 8px 12px; }
     .cover img { width: 44px; height: 44px; }
     .info { flex-basis: calc(100% - 60px); }
     .controls { width: 100%; justify-content: center; }
+    .chapter-list { position: fixed; left: 16px; right: 16px; width: auto; bottom: calc(var(--player-h) + 8px); }
   }
 </style>
