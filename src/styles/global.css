@@ -12,11 +12,34 @@
   --red-deep: #600000;
   --accent: #ff4d4d;
   --accent-ink: #ffffff;
+  --header-bg: rgb(13 13 15 / 0.85);
+  /* Avspilleren skiller seg ut med logoens sølvfarge. */
+  --player-bg: linear-gradient(180deg, #e4e4e8, #c4c4ca);
+  --player-text: #141416;
+  --player-muted: #4a4a52;
+  --player-hover: rgb(0 0 0 / 0.08);
   --radius: 12px;
   --max: 1200px;
   --player-h: 0px;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.55;
+}
+
+/* Lyst tema settes av skriptet i <head> ut fra lagret valg eller systeminnstilling. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f4f4f6;
+  --surface: #ffffff;
+  --surface-2: #ebebef;
+  --border: #d9d9df;
+  --text: #141416;
+  --muted: #5c5c66;
+  --accent: #c8000a;
+  --header-bg: rgb(244 244 246 / 0.85);
+  --player-bg: linear-gradient(180deg, #2a2a30, #141418);
+  --player-text: #f2f2f4;
+  --player-muted: #b4b4bc;
+  --player-hover: rgb(255 255 255 / 0.1);
 }
 
 * { box-sizing: border-box; }
