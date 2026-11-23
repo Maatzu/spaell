@@ -176,8 +176,8 @@ export function formatDuration(seconds: number): string {
   return h > 0 ? `${h} t ${m} min` : `${m} min`;
 }
 
-export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Oslo' });
+export function formatDate(iso: string, month: 'long' | 'short' = 'long'): string {
+  return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month, year: 'numeric', timeZone: 'Europe/Oslo' });
 }
 
 export function formatTimestamp(seconds: number): string {

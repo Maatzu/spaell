@@ -154,21 +154,28 @@ const jsonLd = {
   }
 
   .episodes { padding-top: 24px; }
-  h2 { margin: 0 0 16px; font-size: 1.5rem; }
+  h2 { margin: 0 0 12px; font-size: 1.5rem; }
 
   .filters {
-    display: flex; gap: 8px; align-items: center; margin-bottom: 24px;
-    padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    display: flex; gap: 6px; align-items: center; margin-bottom: 20px;
+    padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
   }
   .search { position: relative; flex: 1; min-width: 0; }
   .search svg { position: absolute; left: 14px; top: 50%; translate: 0 -50%; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
   .filters input, .filters select, .filters button {
     font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid transparent;
-    border-radius: 999px; padding: 8px 14px; height: 40px;
+    border-radius: 999px; padding: 0 14px; height: 40px;
   }
+  .filters select, .filters button { cursor: pointer; }
+  .filters select {
+    appearance: none; padding-right: 34px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a6a6ae' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center; background-size: 14px;
+  }
+  .filters select:hover, .filters button:hover { background-color: var(--border); }
   .filters input { width: 100%; padding-left: 40px; }
   .filters input:focus, .filters select:focus { border-color: var(--red); outline: none; }
-  .selects { display: flex; gap: 8px; }
+  .selects { display: flex; gap: 6px; }
   .reset { color: var(--muted) !important; background: transparent !important; }
   .reset:hover { color: var(--text) !important; }
   .filter-toggle { display: none; }
@@ -179,7 +186,7 @@ const jsonLd = {
   .filter-count[hidden] { display: none; }
 
   @media (max-width: 760px) {
-    .filters { flex-wrap: wrap; border-radius: var(--radius); }
+    .filters { flex-wrap: wrap; border-radius: 26px; }
     .filter-toggle { display: inline-flex; align-items: center; }
     .filter-toggle[aria-expanded='true'] { border-color: var(--red); }
     .selects { display: none; width: 100%; flex-wrap: wrap; }
