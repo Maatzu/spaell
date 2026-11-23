@@ -84,6 +84,48 @@ const jsonLd = {
 </Base>
 
 <script>
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  /** Gir kortene i synsfeltet et view-transition-navn, slik at de glir til ny plass. */
+  function nameVisibleCards(cards: HTMLElement[]) {
+    cards.forEach((card, i) => {
+      if (card.hidden) return;
+      const { top, bottom } = card.getBoundingClientRect();
+      if (bottom > -200 && top < innerHeight + 200) {
+        card.style.viewTransitionName = `ep-${i}`;
+        card.style.setProperty('view-transition-class', 'card');
+      }
+    });
+  }
+
+  let current: ViewTransition | undefined;
+
+  function animate(cards: HTMLElement[], update: () => void) {
+    if (!document.startViewTransition || reducedMotion.matches) return update();
+    nameVisibleCards(cards);
+    const run = () => {
+      update();
+      nameVisibleCards(cards);
+    };
+    let transition: ViewTransition;
+    try {
+      transition = document.startViewTransition({ update: run, types: ['filter'] });
+    } catch {
+      // Eldre nettlesere støtter bare en callback, uten typer.
+      transition = document.startViewTransition(run);
+    }
+    current = transition;
+    // En ny overgang avbryter den forrige; da skal ikke den gamle rydde bort navnene.
+    transition.ready.catch(() => {});
+    transition.finished.finally(() => {
+      if (current !== transition) return;
+      cards.forEach((card) => {
+        card.style.viewTransitionName = '';
+        card.style.removeProperty('view-transition-class');
+      });
+    });
+  }
+
   function setupFilters() {
     const grid = document.querySelector<HTMLElement>('[data-grid]');
     if (!grid) return;
@@ -122,7 +164,13 @@ const jsonLd = {
       reset.hidden = active === 0 && !q.value;
     }
 
-    [q, year, type, sort].forEach((el) => el.addEventListener('input', apply));
+    // Søkefeltet venter til du har skrevet ferdig, så animasjonen ikke starter på hvert tastetrykk.
+    let typing: ReturnType<typeof setTimeout>;
+    q.addEventListener('input', () => {
+      clearTimeout(typing);
+      typing = setTimeout(() => animate(cards, apply), 180);
+    });
+    [year, type, sort].forEach((el) => el.addEventListener('input', () => animate(cards, apply)));
     toggle.addEventListener('click', () => {
       const open = toggle.getAttribute('aria-expanded') !== 'true';
       toggle.setAttribute('aria-expanded', String(open));
@@ -131,7 +179,7 @@ const jsonLd = {
     reset.addEventListener('click', () => {
       q.value = year.value = type.value = '';
       sort.value = 'new';
-      apply();
+      animate(cards, apply);
     });
     apply();
   }

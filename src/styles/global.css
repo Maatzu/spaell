@@ -92,3 +92,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .prose p { margin: 0 0 1em; }
 .prose a { word-break: break-word; }
+
+/* View transitions for filtrering og temabytte. */
+::view-transition-group(.card) {
+  animation-duration: 0.35s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-new(.card):only-child { animation: card-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+::view-transition-old(.card):only-child { animation: card-out 0.2s ease-in both; }
+
+@keyframes card-in { from { opacity: 0; scale: 0.9; } }
+@keyframes card-out { to { opacity: 0; scale: 0.9; } }
+
+/* Under filtrering står resten av siden stille; ved temabytte styrer skriptet sirkelen. */
+:active-view-transition-type(filter)::view-transition-old(root),
+:active-view-transition-type(filter)::view-transition-new(root),
+:active-view-transition-type(theme)::view-transition-old(root),
+:active-view-transition-type(theme)::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
