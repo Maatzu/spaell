@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import sanitizeHtml from 'sanitize-html';
+import { TAGS, type EpisodeTags } from '../data/tags';
 import { FEED_URL } from './links';
 
 export type EpisodeType = 'episode' | 'spaellbreak' | 'spesial';
@@ -27,6 +28,8 @@ export interface Episode {
   text: string;
   summary: string;
   chapters: Chapter[];
+  /** Håndlagde tags fra src/data/tags.ts; tomt for episoder som ikke er tagget. */
+  tags: EpisodeTags;
 }
 
 export interface Podcast {
@@ -132,6 +135,7 @@ function parseFeed(xml: string): Podcast {
         start: parseTime(String(c.start)),
         title: decodeEntities(String(c.title)),
       })),
+      tags: {},
     };
   });
 
@@ -141,6 +145,7 @@ function parseFeed(xml: string): Podcast {
   for (const ep of episodes) {
     if (seen.has(ep.slug)) ep.slug = `${ep.slug}-${ep.id.slice(0, 8)}`;
     seen.add(ep.slug);
+    ep.tags = TAGS[ep.slug] ?? {};
   }
 
   return {

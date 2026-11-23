@@ -1,10 +1,11 @@
 ---
 import Base from '../../layouts/Base.astro';
+import { Image } from 'astro:assets';
 import PlayButton from '../../components/PlayButton.astro';
-import { getPodcast, type Episode } from '../../lib/feed';
-import { episodeLabel, formatDate, formatDuration, formatTimestamp, sizedImage } from '../../lib/format';
-import { absoluteUrl, episodeUrl, url } from '../../lib/links';
+import { getPodcast, formatDate, formatDuration, formatTimestamp, sizedImage, TYPE_LABEL, type Episode } from '../../lib/feed';
+import { url } from '../../lib/links';
 import { playData } from '../../lib/play';
+import { TAG_LABELS, type EpisodeTags } from '../../data/tags';
 
 export async function getStaticPaths() {
   const { episodes } = await getPodcast();
@@ -21,6 +22,10 @@ interface Props {
 }
 
 const { episode, newer, older } = Astro.props;
+const label = episode.number !== null ? `#${episode.number}` : TYPE_LABEL[episode.type];
+const tagGroups = (Object.keys(TAG_LABELS) as (keyof EpisodeTags)[])
+  .filter((key) => episode.tags[key]?.length)
+  .map((key) => ({ label: TAG_LABELS[key], values: episode.tags[key]! }));
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -30,10 +35,10 @@ const jsonLd = {
   datePublished: episode.date,
   description: episode.summary,
   image: episode.image,
-  url: absoluteUrl(episodeUrl(episode)),
+  url: new URL(url(`episode/${episode.slug}/`), Astro.site).href,
   timeRequired: `PT${Math.round(episode.duration / 60)}M`,
   associatedMedia: { '@type': 'MediaObject', contentUrl: episode.audioUrl },
-  partOfSeries: { '@type': 'PodcastSeries', name: 'Spæll', url: absoluteUrl() },
+  partOfSeries: { '@type': 'PodcastSeries', name: 'Spæll', url: new URL(url(), Astro.site).href },
 };
 ---
 
@@ -45,19 +50,72 @@ const jsonLd = {
   ogType="article"
 >
   <article class="wrap episode">
-    <a class="back" href={url()}>← Alle episoder</a>
-    <header>
-      <img src={sizedImage(episode.image, 'Large')} alt="" width="360" height="360" />
-      <div>
-        <span class={`badge badge-${episode.type}`}>{episodeLabel(episode)}</span>
-        <h1>{episode.title}</h1>
-        <p class="meta"><time datetime={episode.date}>{formatDate(episode.date)}</time> · {formatDuration(episode.duration)}</p>
-        <PlayButton episode={episode} />
-      </div>
-    </header>
+    <div class="topnav">
+      <a class="back" href={url('#episoder')}>← Alle episoder</a>
+      <!-- Bla mellom episoder øverst, så det er lett å nå på mobil uten å scrolle til bunnen. -->
+      <nav class="step" aria-label="Bla i episoder">
+        {
+          older ? (
+            <a href={url(`episode/${older.slug}/`)} rel="prev" title={older.fullTitle} aria-label={`Forrige episode: ${older.fullTitle}`}>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+              Forrige<span class="long"> episode</span>
+            </a>
+          ) : (
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16"><path d="m15 6-6 6 6 6" /></svg>
+              Forrige<span class="long"> episode</span>
+            </span>
+          )
+        }
+        {
+          newer ? (
+            <a href={url(`episode/${newer.slug}/`)} rel="next" title={newer.fullTitle} aria-label={`Neste episode: ${newer.fullTitle}`}>
+              Neste<span class="long"> episode</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+            </a>
+          ) : (
+            <span aria-hidden="true">
+              Neste<span class="long"> episode</span>
+              <svg viewBox="0 0 24 24" width="16" height="16"><path d="m9 6 6 6-6 6" /></svg>
+            </span>
+          )
+        }
+      </nav>
+    </div>
 
     <div class="content">
+      <header>
+        <Image src={sizedImage(episode.image, 'Medium')} alt="" width={360} height={360} widths={[208, 360, 600]} sizes="(max-width: 640px) 104px, 280px" loading="eager" fetchpriority="high" />
+        <div>
+          <span class={`badge badge-${episode.type}`}>{label}</span>
+          <h1>{episode.title}</h1>
+          <p class="meta"><time datetime={episode.date}>{formatDate(episode.date)}</time> · {formatDuration(episode.duration)}</p>
+          <PlayButton episode={episode} />
+        </div>
+      </header>
+
       <div class="prose" set:html={episode.descriptionHtml} />
+
+      <div class="aside">
+      {
+        tagGroups.length > 0 && (
+          <section class="tags" aria-labelledby="tags">
+            <h2 id="tags">Om episoden</h2>
+            <dl>
+              {tagGroups.map((group) => (
+                <div>
+                  <dt>{group.label}</dt>
+                  <dd>
+                    {group.values.map((value) => (
+                      <a href={url(`?q=${encodeURIComponent(value)}#episoder`)} title={`Søk etter «${value}»`}>{value}</a>
+                    ))}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )
+      }
 
       {
         episode.chapters.length > 0 && (
@@ -80,31 +138,72 @@ const jsonLd = {
           </section>
         )
       }
+      </div>
     </div>
 
     <nav class="pager" aria-label="Flere episoder">
-      {newer ? <a href={episodeUrl(newer)}><span class="meta">Nyere</span>{newer.fullTitle}</a> : <span />}
-      {older && <a class="older" href={episodeUrl(older)}><span class="meta">Eldre</span>{older.fullTitle}</a>}
+      {older ? <a href={url(`episode/${older.slug}/`)} rel="prev"><span class="meta">← Forrige episode</span>{older.fullTitle}</a> : <span />}
+      {newer && <a class="newer" href={url(`episode/${newer.slug}/`)} rel="next"><span class="meta">Neste episode →</span>{newer.fullTitle}</a>}
     </nav>
   </article>
 </Base>
 
 <style>
   .episode { padding-top: 24px; }
-  .back { display: inline-block; margin-bottom: 24px; text-decoration: none; }
+  .topnav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+  .back { text-decoration: none; }
+  .step { display: flex; gap: 6px; }
+  .step > a, .step > span {
+    display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px 6px 10px;
+    font-size: 0.875rem; font-weight: 600; text-decoration: none; color: var(--text);
+    border: 1px solid var(--border); border-radius: 999px;
+  }
+  .step > a[rel='next'], .step > span:last-child { padding: 6px 10px 6px 12px; }
+  .step a:hover { color: var(--accent); border-color: var(--accent); }
+  .step > span { opacity: 0.35; }
+  .step svg { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
   header { display: grid; grid-template-columns: minmax(0, 280px) 1fr; gap: 32px; align-items: end; margin-bottom: 32px; }
   header img { border-radius: var(--radius); aspect-ratio: 1; object-fit: cover; }
   h1 { margin: 10px 0 6px; font-size: clamp(1.8rem, 4vw, 2.75rem); line-height: 1.1; }
   header .meta { margin: 0 0 18px; }
+  /* Mobil: lite cover ved siden av tittelen, play-knappen i full bredde under. */
   @media (max-width: 640px) {
-    header { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-    header img { max-width: 220px; }
+    .episode { padding-top: 16px; }
+    .topnav { margin-bottom: 16px; }
+    .step > a, .step > span { min-height: 36px; }
+    .step .long { display: none; }
+    header { grid-template-columns: 104px minmax(0, 1fr); gap: 0 16px; align-items: start; margin-bottom: 24px; }
+    header > div { display: contents; }
+    header img { grid-row: 1 / span 3; }
+    header .badge, h1, header .meta { grid-column: 2; justify-self: start; }
+    h1 { margin: 6px 0 4px; font-size: 1.4rem; }
+    header .meta { margin: 0; font-size: 0.8rem; }
+    header :global(.btn) { grid-column: 1 / -1; margin-top: 16px; justify-content: center; }
+    .prose { font-size: 1rem; }
   }
 
-  .content { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; align-items: start; }
+  /* Desktop: «Om episoden» og kapitler står i egen kolonne fra toppen, ved siden av tittelen. */
+  .content { display: grid; grid-template-columns: minmax(0, 1fr) 320px; column-gap: 40px; align-items: start; }
+  header, .prose { grid-column: 1; }
+  .aside { grid-column: 2; grid-row: 1 / span 2; }
   .prose { max-width: 68ch; font-size: 1.05rem; }
-  @media (max-width: 900px) { .content { grid-template-columns: minmax(0, 1fr); } }
+  /* Smalere: én kolonne i rekkefølgen tittel, beskrivelse, «Om episoden» og kapitler. */
+  @media (max-width: 900px) {
+    .content { grid-template-columns: minmax(0, 1fr); }
+    .aside { grid-column: 1; grid-row: auto; margin-top: 40px; }
+  }
 
+  .aside { display: grid; gap: 16px; }
+  .tags { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .tags h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  .tags dl { display: grid; gap: 10px; margin: 0; }
+  .tags dt { margin-bottom: 4px; color: var(--muted); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+  .tags dd { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+  .tags a {
+    padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 550; text-decoration: none;
+    color: var(--text); background: var(--surface-2); border: 1px solid transparent;
+  }
+  .tags a:hover { color: var(--accent); border-color: var(--accent); }
   .chapters { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
   .chapters h2 { margin: 0 0 8px; font-size: 1.1rem; }
   .chapters ol { list-style: none; margin: 0; padding: 0; }
@@ -118,5 +217,5 @@ const jsonLd = {
   .pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; border-top: 1px solid var(--border); padding-top: 24px; }
   .pager a { display: flex; flex-direction: column; text-decoration: none; color: var(--text); max-width: 45%; }
   .pager a:hover { color: var(--accent); }
-  .older { text-align: right; margin-left: auto; }
+  .newer { text-align: right; margin-left: auto; }
 </style>

@@ -1,10 +1,12 @@
 ---
 import Base from '../layouts/Base.astro';
-import EpisodeCard from '../components/EpisodeCard.astro';
 import PlayButton from '../components/PlayButton.astro';
+import EpisodeCard from '../components/EpisodeCard.astro';
+import { Image } from 'astro:assets';
 import { getPodcast } from '../lib/feed';
 import { episodeLabel, formatDate, formatDuration, sizedImage } from '../lib/format';
-import { FEED_URL, absoluteUrl, episodeUrl } from '../lib/links';
+import { FEED_URL, SOCIAL_LINKS, absoluteUrl, episodeUrl } from '../lib/links';
+import LinkIcon from '../components/LinkIcon.astro';
 
 const podcast = await getPodcast();
 const [latest] = podcast.episodes;
@@ -26,8 +28,8 @@ const jsonLd = {
 <Base jsonLd={jsonLd}>
   <section class="hero">
     <div class="wrap hero-inner">
-      <a href={latestUrl} class="hero-cover">
-        <img src={sizedImage(latest.image, 'Large')} alt="" width="480" height="480" />
+      <a href={latestUrl} class="hero-cover" tabindex="-1" aria-hidden="true">
+        <Image src={sizedImage(latest.image, 'Large')} alt="" width={480} height={480} widths={[240, 480, 960]} sizes="(max-width: 720px) 104px, 320px" loading="eager" fetchpriority="high" />
       </a>
       <div class="hero-text">
         <p class="eyebrow">Siste episode</p>
@@ -42,16 +44,37 @@ const jsonLd = {
           <a class="btn btn-ghost" href={latestUrl}>Les mer</a>
         </div>
       </div>
+      <aside class="hero-links" aria-labelledby="folg">
+        <div>
+          <h2 id="folg">Følg Spæll</h2>
+          <ul>
+            {SOCIAL_LINKS.map((l) => <li><a href={l.href} target="_blank" rel="noopener"><LinkIcon name={l.icon} size={18} />{l.label}</a></li>)}
+          </ul>
+        </div>
+      </aside>
     </div>
   </section>
 
-  <section class="wrap episodes" aria-labelledby="alle">
-    <h2 id="alle">Alle episoder <span class="meta" data-count>({podcast.episodes.length})</span></h2>
+  <section class="wrap episodes" aria-labelledby="episoder">
+    <div class="list-head">
+      <h2 id="episoder">Alle episoder <span class="meta" data-count>({podcast.episodes.length})</span></h2>
+      <!-- Står utenfor filterlinja, så ingenting flytter seg når den dukker opp. -->
+      <button type="button" class="reset" data-reset hidden>
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        Nullstill filter
+      </button>
+    </div>
     <div class="filters" role="search">
       <div class="search">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
         <label class="visually-hidden" for="q">Søk</label>
-        <input id="q" type="search" placeholder="Søk etter spill, gjester …" autocomplete="off" />
+        <input
+          id="q"
+          type="search"
+          placeholder="Søk etter spill, gjester, tema, konsoll eller episodenummer, f.eks. 120 …"
+          data-placeholders="Søk etter spill, gjester, tema, konsoll eller episodenummer …|Spill, gjester, episode"
+          autocomplete="off"
+        />
       </div>
       <button type="button" class="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
         Filter <span class="filter-count" data-filter-count hidden></span>
@@ -74,13 +97,13 @@ const jsonLd = {
           <option value="new">Nyeste først</option>
           <option value="old">Eldste først</option>
         </select>
-        <button type="button" class="reset" data-reset hidden>Nullstill</button>
       </div>
     </div>
 
     <ul class="grid" data-grid>
-      {podcast.episodes.map((episode) => <EpisodeCard episode={episode} />)}
+      {podcast.episodes.map((episode, i) => <EpisodeCard episode={episode} eager={i < 6} />)}
     </ul>
+    <p class="visually-hidden" aria-live="polite" data-status></p>
     <p class="empty" data-empty hidden>Ingen episoder passer søket.</p>
   </section>
 </Base>
@@ -126,10 +149,20 @@ const jsonLd = {
     const grid = document.querySelector<HTMLElement>('[data-grid]');
     if (!grid) return;
     const q = document.querySelector<HTMLInputElement>('#q')!;
+    // Bruk den lengste placeholderen som får plass i søkefeltet, og velg på nytt når bredden endres.
+    const placeholders = [q.placeholder, ...q.dataset.placeholders!.split('|')];
+    const measure = document.createElement('canvas').getContext('2d')!;
+    new ResizeObserver(() => {
+      const style = getComputedStyle(q);
+      measure.font = style.font;
+      const room = q.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      q.placeholder = placeholders.find((p) => measure.measureText(p).width <= room) ?? placeholders.at(-1)!;
+    }).observe(q);
     const year = document.querySelector<HTMLSelectElement>('#year')!;
     const type = document.querySelector<HTMLSelectElement>('#type')!;
     const sort = document.querySelector<HTMLSelectElement>('#sort')!;
     const count = document.querySelector<HTMLElement>('[data-count]')!;
+    const status = document.querySelector<HTMLElement>('[data-status]')!;
     const empty = document.querySelector<HTMLElement>('[data-empty]')!;
     const toggle = document.querySelector<HTMLButtonElement>('.filter-toggle')!;
     const panel = document.querySelector<HTMLElement>('#filter-panel')!;
@@ -152,6 +185,7 @@ const jsonLd = {
       const ordered = sort.value === 'old' ? [...cards].reverse() : cards;
       if (grid!.firstElementChild !== ordered[0]) grid!.append(...ordered);
       count.textContent = `(${visible})`;
+      status.textContent = visible === cards.length ? '' : `${visible} episoder passer søket`;
       empty.hidden = visible > 0;
 
       const active = [year.value, type.value, sort.value !== 'new'].filter(Boolean).length;
@@ -177,6 +211,9 @@ const jsonLd = {
       sort.value = 'new';
       animate(cards, apply);
     });
+    // Tag-lenker fra episodesidene kommer hit med ?q=<tag>.
+    const initial = new URLSearchParams(location.search).get('q');
+    if (initial) q.value = initial;
     apply();
   }
 
@@ -185,20 +222,54 @@ const jsonLd = {
 
 <style>
   .hero { padding-block: 48px; background: radial-gradient(ellipse at top left, rgb(200 0 10 / 0.22) 0%, transparent 60%); }
-  .hero-inner { display: grid; grid-template-columns: minmax(0, 320px) 1fr; gap: 40px; align-items: center; }
+  .hero-inner { display: grid; grid-template-columns: minmax(0, 320px) 1fr auto; gap: 40px; align-items: center; }
   .hero-cover img { border-radius: var(--radius); box-shadow: 0 20px 60px rgb(0 0 0 / 0.5); aspect-ratio: 1; object-fit: cover; }
   .eyebrow { margin: 0; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; }
   h1 { margin: 6px 0 8px; font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.1; }
   h1 a { color: inherit; text-decoration: none; }
   .summary { color: var(--muted); max-width: 60ch; }
   .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+  .hero-links { display: grid; gap: 20px; padding-left: 32px; border-left: 1px solid var(--border); }
+  .hero-links h2 {
+    margin: 0 0 8px; color: var(--muted); font-size: 0.8rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .hero-links ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .hero-links a { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; white-space: nowrap; }
+  .hero-links a:hover { color: var(--accent); }
+  @media (max-width: 1000px) {
+    .hero-inner { grid-template-columns: minmax(0, 280px) 1fr; }
+    .hero-links { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 20px 48px; padding: 24px 0 0; border-left: 0; border-top: 1px solid var(--border); }
+    .hero-links ul { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+  }
+  /* Mobil: lite cover ved siden av tittelen, resten i full bredde under. */
   @media (max-width: 720px) {
-    .hero-inner { grid-template-columns: 1fr; gap: 24px; }
-    .hero-cover { max-width: 240px; }
+    .hero { padding-block: 20px 28px; }
+    .hero-inner { grid-template-columns: 104px minmax(0, 1fr); gap: 0 16px; align-items: start; align-content: start; }
+    .hero-text { display: contents; }
+    .hero-cover { grid-row: 1 / span 3; }
+    .hero-cover img { box-shadow: 0 8px 24px rgb(0 0 0 / 0.4); }
+    .eyebrow, h1, .hero-text > .meta { grid-column: 2; }
+    h1 { margin: 2px 0 4px; font-size: 1.4rem; }
+    .hero-text > .meta { margin: 0; font-size: 0.8rem; }
+    .summary {
+      grid-column: 1 / -1; margin: 16px 0 0;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .actions { grid-column: 1 / -1; margin-top: 16px; }
+    .actions :global(.btn) { flex: 1; justify-content: center; }
+    .hero-links { margin-top: 24px; padding-top: 20px; }
+    .hero-links ul { gap: 8px; }
+    .hero-links a { padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; font-size: 0.9rem; gap: 8px; }
+    .hero-links a :global(svg) { width: 16px; height: 16px; }
   }
 
+
   .episodes { padding-top: 24px; }
-  h2 { margin: 0 0 12px; font-size: 1.5rem; }
+  .list-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+  h2 { margin: 0; font-size: 1.5rem; }
+  /* «Episoder» i menyen hopper hit; overskriften skal havne rett under den faste headeren. */
+  #episoder { scroll-margin-top: 88px; }
 
   .filters {
     display: flex; gap: 6px; align-items: center; margin-bottom: 20px;
@@ -220,24 +291,63 @@ const jsonLd = {
   .filters input { width: 100%; padding-left: 40px; }
   .filters input:focus, .filters select:focus { border-color: var(--red); outline: none; }
   .selects { display: flex; gap: 6px; }
-  .reset { color: var(--muted) !important; background: transparent !important; }
-  .reset:hover { color: var(--text) !important; }
+
+  /* Egen nedtrekksliste der nettleseren støtter det (appearance: base-select); ellers brukes den vanlige. */
+  @supports (appearance: base-select) {
+    .filters select, .filters select::picker(select) { appearance: base-select; }
+    .filters select { display: flex; align-items: center; }
+    /* Fast bredde etter lengste valg, så knappene ikke endrer størrelse når valget endres. */
+    #year { width: 7.5em; }
+    #type { width: 9.5em; }
+    #sort { width: 10em; }
+    .filters select::picker-icon { display: none; }
+    .filters select:open { border-color: var(--red); }
+    .filters select::picker(select) {
+      margin-top: 8px; padding: 6px; min-width: anchor-size(width);
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 16px 40px rgb(0 0 0 / 0.35);
+      opacity: 0; translate: 0 -6px;
+      transition: opacity 0.15s ease, translate 0.15s ease, overlay 0.15s allow-discrete, display 0.15s allow-discrete;
+    }
+    .filters select:open::picker(select) { opacity: 1; translate: 0 0; }
+    @starting-style {
+      .filters select:open::picker(select) { opacity: 0; translate: 0 -6px; }
+    }
+    .filters option {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px;
+      font-size: 0.95rem; cursor: pointer;
+    }
+    .filters option:hover, .filters option:focus-visible { background: var(--surface-2); outline: none; }
+    .filters option:checked { color: var(--accent); font-weight: 650; }
+    .filters option::checkmark { order: 1; margin-left: auto; color: var(--accent); }
+    .filters #year::picker(select) { max-height: 320px; overflow-y: auto; }
+  }
+  .reset {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    font: inherit; font-size: 0.875rem; font-weight: 600; color: var(--muted); cursor: pointer;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent;
+  }
+  .reset[hidden] { display: none; }
+  .reset:hover { color: var(--accent); border-color: var(--accent); }
+  .reset svg { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
   .filter-toggle { display: none; }
+  /* Merket ligger oppå hjørnet av knappen, så knappen ikke blir bredere når det dukker opp. */
   .filter-count {
-    display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px;
+    position: absolute; top: -6px; right: -6px;
+    display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px;
     border-radius: 999px; background: var(--red); color: #fff; font-size: 0.75rem; font-weight: 700;
   }
   .filter-count[hidden] { display: none; }
 
   @media (max-width: 760px) {
     .filters { flex-wrap: wrap; border-radius: 26px; }
-    .filter-toggle { display: inline-flex; align-items: center; }
+    .filter-toggle { position: relative; display: inline-flex; align-items: center; }
     .filter-toggle[aria-expanded='true'] { border-color: var(--red); }
     .selects { display: none; width: 100%; flex-wrap: wrap; }
     .selects.is-open { display: grid; grid-template-columns: 1fr 1fr; }
-    .selects select { width: 100%; }
+    .selects select, #year, #type, #sort { width: 100%; }
     .selects select:last-of-type { grid-column: 1 / -1; }
-    .reset { grid-column: 1 / -1; }
     .filters input { font-size: 16px; } /* hindrer zoom på iOS */
   }
 

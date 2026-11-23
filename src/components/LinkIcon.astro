@@ -1,0 +1,11 @@
+---
+import { ICONS, type IconName } from '../lib/icons';
+
+const { name, size = 16 } = Astro.props as { name: IconName; size?: number };
+---
+
+<svg class="link-icon" viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true"><path d={ICONS[name]} /></svg>
+
+<style>
+  .link-icon { flex-shrink: 0; vertical-align: -0.15em; }
+</style>
