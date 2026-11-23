@@ -104,11 +104,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @keyframes card-in { from { opacity: 0; scale: 0.9; } }
 @keyframes card-out { to { opacity: 0; scale: 0.9; } }
 
-/* Under filtrering står resten av siden stille; ved temabytte styrer skriptet sirkelen. */
+/* Header og avspiller ligger over kortene mens de animeres. */
+::view-transition-group(site-header),
+::view-transition-group(player) { z-index: 10; }
+
+/* Under filtrering står resten av siden stille. */
 :active-view-transition-type(filter)::view-transition-old(root),
-:active-view-transition-type(filter)::view-transition-new(root),
-:active-view-transition-type(theme)::view-transition-old(root),
-:active-view-transition-type(theme)::view-transition-new(root) {
+:active-view-transition-type(filter)::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
+}
+
+/* Temabytte tones rolig over. */
+:active-view-transition-type(theme)::view-transition-group(*),
+:active-view-transition-type(theme)::view-transition-old(*),
+:active-view-transition-type(theme)::view-transition-new(*) {
+  animation-duration: 0.4s;
+  animation-timing-function: ease;
 }
