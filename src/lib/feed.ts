@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import sanitizeHtml from 'sanitize-html';
+import { TAGS, type EpisodeTags } from '../data/tags';
 
 export const FEED_URL =
   'https://www.omnycontent.com/d/playlist/d79bdbb3-8eae-4ad2-b1f6-b0bc00cd1540/b0b974e4-d76a-4f77-905a-b3ef00b49619/12340bdf-8da5-4473-88e7-b3ef00b49642/podcast.rss';
@@ -29,6 +30,8 @@ export interface Episode {
   text: string;
   summary: string;
   chapters: Chapter[];
+  /** Håndlagde tags fra src/data/tags.ts; tomt for episoder som ikke er tagget. */
+  tags: EpisodeTags;
 }
 
 export interface Podcast {
@@ -138,6 +141,7 @@ function parseFeed(xml: string): Podcast {
         start: parseTime(String(c.start)),
         title: decodeEntities(String(c.title)),
       })),
+      tags: {},
     };
   });
 
@@ -147,6 +151,7 @@ function parseFeed(xml: string): Podcast {
   for (const ep of episodes) {
     if (seen.has(ep.slug)) ep.slug = `${ep.slug}-${ep.id.slice(0, 8)}`;
     seen.add(ep.slug);
+    ep.tags = TAGS[ep.slug] ?? {};
   }
 
   return {

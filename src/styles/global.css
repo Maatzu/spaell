@@ -18,6 +18,8 @@
   --player-text: #141416;
   --player-muted: #4a4a52;
   --player-hover: rgb(0 0 0 / 0.08);
+  --player-scheme: light;
+  --player-edge: #d4d4d9;
   --radius: 12px;
   --max: 1200px;
   --player-h: 0px;
@@ -40,6 +42,8 @@
   --player-text: #f2f2f4;
   --player-muted: #b4b4bc;
   --player-hover: rgb(255 255 255 / 0.1);
+  --player-scheme: dark;
+  --player-edge: #1e1e23;
 }
 
 * { box-sizing: border-box; }
@@ -114,6 +118,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
 :active-view-transition-type(filter)::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
+}
+
+/* Hopp til et anker: siden glir ut i hoppretningen og den nye posisjonen glir inn. */
+:active-view-transition-type(jump)::view-transition-old(root) { animation: jump-out 0.25s ease-in both; }
+:active-view-transition-type(jump)::view-transition-new(root) { animation: jump-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+:root { --jump: 1; }
+:active-view-transition-type(jump-up) { --jump: -1; }
+
+@keyframes jump-out { to { opacity: 0; translate: 0 calc(var(--jump) * -48px); } }
+@keyframes jump-in { from { opacity: 0; translate: 0 calc(var(--jump) * 48px); } }
+
+/* Avspilleren krymper til ikonet nede til høyre, og vokser ut igjen. */
+:active-view-transition-type(player)::view-transition-group(player) {
+  animation-duration: 0.35s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+:active-view-transition-type(player)::view-transition-old(player),
+:active-view-transition-type(player)::view-transition-new(player) {
+  height: 100%; object-fit: cover; overflow: clip;
 }
 
 /* Temabytte tones rolig over. */

@@ -1,7 +1,9 @@
 ---
 import { ClientRouter } from 'astro:transitions';
 import Player from '../components/Player.astro';
-import { LISTEN_LINKS, SOCIAL_LINKS, url } from '../lib/links';
+import { Image } from 'astro:assets';
+import { LISTEN_LINKS, url } from '../lib/links';
+import LinkIcon from '../components/LinkIcon.astro';
 import { getPodcast, sizedImage } from '../lib/feed';
 import '../styles/global.css';
 
@@ -18,17 +20,20 @@ const { title, description, image, jsonLd, ogType = 'website' } = Astro.props;
 const fullTitle = title ? `${title} – Spæll` : 'Spæll – podcasten om gamle og nye spill';
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const podcast = await getPodcast();
+// Første del av stien etter base, for å markere aktiv meny.
+const section = Astro.url.pathname.slice(import.meta.env.BASE_URL.replace(/\/$/, '').length).split('/')[1];
 ---
 
 <!doctype html>
-<html lang="no">
+<html lang="nb">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" href={url('favicon.svg')} type="image/svg+xml" />
+    <link rel="icon" href={url('favicon.png')} type="image/png" sizes="96x96" />
+    <link rel="apple-touch-icon" href={url('apple-touch-icon.png')} />
     <link rel="sitemap" href={url('sitemap-index.xml')} />
     <meta name="theme-color" content="#0d0d0f" />
     <script is:inline>
@@ -101,18 +106,19 @@ const podcast = await getPodcast();
     </script>
   </head>
   <body>
+    <a class="skip-link" href="#innhold">Hopp til innhold</a>
     <header class="site-header">
       <div class="wrap header-inner">
         <a class="logo" href={url()}>
-          <img src={sizedImage(podcast.image, 'Thumbnail')} alt="" width="32" height="32" />
-          Spæll
+          <Image src={sizedImage(podcast.image, 'Small')} alt="" width={32} height={32} densities={[1, 2]} loading="eager" />
+          <span class="logo-text">Spæll</span>
         </a>
         <nav aria-label="Hovedmeny" class="nav">
-          <a href={url()}>Episoder</a>
-          <a href={url('om/')}>Om</a>
+          <a href={url('#episoder')} aria-current={section === 'episode' ? 'page' : undefined}>Episoder</a>
+          <a href={url('om/')} aria-current={section === 'om' ? 'page' : undefined}>Om</a>
         </nav>
         <nav aria-label="Lytt" class="listen">
-          {LISTEN_LINKS.map((l) => <a href={l.href} target="_blank" rel="noopener">{l.label}</a>)}
+          {LISTEN_LINKS.map((l) => <a href={l.href} target="_blank" rel="noopener" title={l.label}><LinkIcon name={l.icon} size={14} /><span class="listen-label">{l.label}</span></a>)}
         </nav>
         <button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Bytt mellom lyst og mørkt tema">
           <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
@@ -121,24 +127,41 @@ const podcast = await getPodcast();
       </div>
     </header>
 
-    <main>
+    <main id="innhold">
       <slot />
     </main>
-
-    <footer class="site-footer">
-      <div class="wrap footer-inner">
-        <ul class="social">
-          {SOCIAL_LINKS.map((l) => <li><a href={l.href} target="_blank" rel="noopener">{l.label}</a></li>)}
-        </ul>
-        <p class="meta">
-          Uoffisiell fanside, laget med kjærlighet til Spæll. Alt innhold og all lyd tilhører Spæll.
-        </p>
-      </div>
-    </footer>
 
     <Player />
   </body>
 </html>
+
+<script>
+  // Lenker til et anker på samme side (som «Episoder» i menyen) glir dit med en view transition
+  // i stedet for å hoppe. Lytter i capture-fasen og kaller preventDefault, så ClientRouter lar klikket være.
+  addEventListener(
+    'click',
+    (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const link = (e.target as Element).closest<HTMLAnchorElement>('a[href*="#"]');
+      if (!link || link.pathname !== location.pathname || !link.hash) return;
+      const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+      if (!target) return;
+      e.preventDefault();
+      const jump = () => {
+        target.scrollIntoView();
+        history.pushState(history.state, '', link.hash);
+      };
+      if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return jump();
+      const down = target.getBoundingClientRect().top > 0;
+      try {
+        document.startViewTransition({ update: jump, types: ['jump', down ? 'jump-down' : 'jump-up'] });
+      } catch {
+        document.startViewTransition(jump);
+      }
+    },
+    true,
+  );
+</script>
 
 <style>
   .site-header {
@@ -150,10 +173,12 @@ const podcast = await getPodcast();
   }
   .header-inner { display: flex; align-items: center; gap: 24px; min-height: 64px; flex-wrap: wrap; padding-block: 8px; }
   .logo img { border-radius: 6px; }
+  /* Omny leverer logoen som JPEG med hvit bakgrunn; i lyst tema smelter den inn i headeren. */
+  :global([data-theme='light']) .logo img { mix-blend-mode: multiply; }
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.25rem; color: var(--text); text-decoration: none; }
   .nav, .listen { display: flex; gap: 16px; }
   .nav a { color: var(--text); text-decoration: none; font-weight: 550; }
-  .nav a:hover { color: var(--accent); }
+  .nav a:hover, .nav a[aria-current='page'] { color: var(--accent); }
   .listen { margin-left: auto; gap: 8px; }
   .theme-toggle {
     display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0;
@@ -164,17 +189,31 @@ const podcast = await getPodcast();
   .icon-moon, :global([data-theme='light']) .icon-sun { display: none; }
   :global([data-theme='light']) .icon-moon { display: block; }
   .listen a {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
     font-size: 0.85rem; text-decoration: none; color: var(--text);
     padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px;
   }
   .listen a:hover { border-color: var(--accent); color: var(--accent); }
-  @media (max-width: 640px) {
-    .theme-toggle { margin-left: auto; }
-    .listen { order: 1; margin-left: 0; width: 100%; overflow-x: auto; }
+  /* På smale skjermer holdes headeren på én rad: lytteknappene blir runde ikoner. */
+  @media (max-width: 760px) {
+    .header-inner { flex-wrap: nowrap; gap: 14px; min-height: 56px; }
+    .nav { gap: 14px; }
+    .listen { gap: 6px; }
+    .listen a { width: 34px; height: 34px; padding: 0; justify-content: center; }
+    .listen a :global(svg) { width: 16px; height: 16px; }
+    .listen-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  }
+  @media (max-width: 420px) {
+    .logo-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .header-inner { gap: 12px; }
   }
 
-  main { min-height: 60vh; }
+  main { min-height: 60vh; padding-bottom: 64px; }
+  .skip-link {
+    position: fixed; top: 8px; left: 8px; z-index: 30; padding: 10px 16px; border-radius: 999px;
+    background: var(--red); color: var(--accent-ink); font-weight: 700; text-decoration: none;
+    translate: 0 -200%;
+  }
+  .skip-link:focus { translate: 0 0; }
 
-  .site-footer { border-top: 1px solid var(--border); margin-top: 64px; padding-block: 32px; }
-  .social { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 8px 20px; }
 </style>

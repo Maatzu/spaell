@@ -1,4 +1,5 @@
 ---
+import { Image } from 'astro:assets';
 import type { Episode } from '../lib/feed';
 import { TYPE_LABEL, formatDate, formatDuration, sizedImage } from '../lib/feed';
 import { url } from '../lib/links';
@@ -6,10 +7,12 @@ import { playData } from '../lib/play';
 
 interface Props {
   episode: Episode;
+  /** Kort som synes uten å scrolle lastes med en gang i stedet for «lazy». */
+  eager?: boolean;
 }
 
-const { episode } = Astro.props;
-const search = `${episode.fullTitle} ${episode.text}`.toLowerCase();
+const { episode, eager = false } = Astro.props;
+const search = `${episode.fullTitle} ${episode.text} ${Object.values(episode.tags).flat().join(' ')}`.toLowerCase();
 const href = url(`episode/${episode.slug}/`);
 ---
 
@@ -20,7 +23,7 @@ const href = url(`episode/${episode.slug}/`);
     {...playData(episode)}
     aria-label={`Spill av ${episode.fullTitle}`}
   >
-    <img src={sizedImage(episode.image, 'Medium')} alt="" width="400" height="400" loading="lazy" decoding="async" />
+    <Image src={sizedImage(episode.image, 'Medium')} alt="" width={400} height={400} widths={[200, 400]} sizes="(max-width: 420px) 50vw, 200px" loading={eager ? 'eager' : 'lazy'} />
     <span class="play" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="26" height="26"><path class="icon-play" d="M8 5v14l11-7z" /><path class="icon-pause" d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
     </span>

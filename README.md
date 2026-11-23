@@ -4,7 +4,7 @@ Statisk nettside (Astro) med alle episodene til spillpodcasten Spæll. Episodene
 
 ```sh
 npm install
-npm run dev      # http://localhost:4321/spaell/
+npm run dev      # http://localhost:4321/  (bygget havner under /spaell/ på GitHub Pages)
 npm run build
 ```
 
