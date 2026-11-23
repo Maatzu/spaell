@@ -1,0 +1,37 @@
+name: Bygg og publiser
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Hver natt kl. 03:00 UTC
+    - cron: '0 3 * * *'
+    # Hver time på tirsdager, når nye episoder pleier å komme
+    - cron: '0 * * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: withastro/action@v6
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

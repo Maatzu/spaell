@@ -1,0 +1,198 @@
+---
+/*
+ * Avspilleren ligger nederst og overlever sidebytter (transition:persist).
+ * Alle elementer med data-play starter en episode:
+ *   data-play="<id>" data-src data-title data-image data-href [data-start=sekunder]
+ */
+---
+
+<div id="player" class="player" transition:persist hidden>
+  <audio preload="none"></audio>
+  <a class="cover" data-link><img alt="" width="56" height="56" /></a>
+  <div class="info">
+    <a class="title" data-link></a>
+    <div class="scrub">
+      <span class="time" data-current>0:00</span>
+      <input type="range" min="0" max="0" step="1" value="0" aria-label="Posisjon i episoden" />
+      <span class="time" data-duration>0:00</span>
+    </div>
+  </div>
+  <div class="controls">
+    <button type="button" data-skip="-15" aria-label="Spol 15 sekunder tilbake">−15</button>
+    <button type="button" class="toggle" data-toggle aria-label="Spill av">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path class="icon-play" d="M8 5v14l11-7z" /><path class="icon-pause" d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+    </button>
+    <button type="button" data-skip="30" aria-label="Spol 30 sekunder frem">+30</button>
+    <button type="button" class="speed" data-speed aria-label="Avspillingshastighet">1×</button>
+  </div>
+</div>
+
+<script>
+  const STORAGE_PREFIX = 'spaell:';
+  const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
+
+  type Track = { id: string; src: string; title: string; image: string; href: string };
+
+  const store = {
+    get<T>(key: string): T | null {
+      try {
+        const v = localStorage.getItem(STORAGE_PREFIX + key);
+        return v === null ? null : (JSON.parse(v) as T);
+      } catch {
+        return null;
+      }
+    },
+    set(key: string, value: unknown) {
+      try {
+        localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+      } catch {}
+    },
+  };
+
+  const root = document.getElementById('player')!;
+  const audio = root.querySelector('audio')!;
+  const range = root.querySelector<HTMLInputElement>('input[type=range]')!;
+  const current = root.querySelector<HTMLElement>('[data-current]')!;
+  const total = root.querySelector<HTMLElement>('[data-duration]')!;
+  const toggle = root.querySelector<HTMLButtonElement>('[data-toggle]')!;
+  const speedBtn = root.querySelector<HTMLButtonElement>('[data-speed]')!;
+  let track: Track | null = null;
+  let lastSaved = 0;
+
+  const fmt = (s: number) => {
+    s = Math.floor(s || 0);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = String(s % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+  };
+
+  function savePosition() {
+    if (track) store.set(`pos:${track.id}`, Math.floor(audio.currentTime));
+  }
+
+  function load(next: Track, start?: number) {
+    if (track?.id !== next.id) {
+      savePosition();
+      track = next;
+      audio.src = next.src;
+      store.set('current', next);
+      root.querySelector('img')!.src = next.image;
+      root.querySelectorAll<HTMLAnchorElement>('[data-link]').forEach((a) => (a.href = next.href));
+      root.querySelector('.title')!.textContent = next.title;
+      root.hidden = false;
+      document.documentElement.style.setProperty('--player-h', `${root.offsetHeight}px`);
+      const resumeAt = start ?? store.get<number>(`pos:${next.id}`) ?? 0;
+      audio.addEventListener('loadedmetadata', () => (audio.currentTime = resumeAt), { once: true });
+    } else if (start !== undefined) {
+      audio.currentTime = start;
+    }
+  }
+
+  function syncButtons() {
+    const playing = !audio.paused;
+    root.classList.toggle('is-playing', playing);
+    toggle.setAttribute('aria-label', playing ? 'Pause' : 'Spill av');
+    document.querySelectorAll<HTMLElement>('[data-play]:not([data-start])').forEach((el) => {
+      const active = playing && el.dataset.play === track?.id;
+      el.classList.toggle('is-playing', active);
+      const label = el.querySelector('[data-play-label]');
+      if (label) label.textContent = active ? 'Pause' : 'Spill av';
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    const el = (e.target as Element).closest<HTMLElement>('[data-play]');
+    if (!el) return;
+    e.preventDefault();
+    const d = el.dataset;
+    const start = d.start !== undefined ? Number(d.start) : undefined;
+    if (d.play === track?.id && start === undefined) {
+      audio.paused ? audio.play() : audio.pause();
+      return;
+    }
+    load({ id: d.play!, src: d.src!, title: d.title!, image: d.image!, href: d.href! }, start);
+    audio.play();
+  });
+
+  toggle.addEventListener('click', () => (audio.paused ? audio.play() : audio.pause()));
+  root.querySelectorAll<HTMLButtonElement>('[data-skip]').forEach((b) =>
+    b.addEventListener('click', () => (audio.currentTime += Number(b.dataset.skip))),
+  );
+  speedBtn.addEventListener('click', () => {
+    const next = SPEEDS[(SPEEDS.indexOf(audio.playbackRate) + 1) % SPEEDS.length];
+    audio.playbackRate = next;
+    speedBtn.textContent = `${next}×`;
+    store.set('speed', next);
+  });
+  range.addEventListener('input', () => (audio.currentTime = Number(range.value)));
+
+  audio.addEventListener('play', () => {
+    audio.playbackRate = store.get<number>('speed') ?? 1;
+    speedBtn.textContent = `${audio.playbackRate}×`;
+    syncButtons();
+  });
+  audio.addEventListener('pause', () => {
+    savePosition();
+    syncButtons();
+  });
+  audio.addEventListener('loadedmetadata', () => {
+    range.max = String(Math.floor(audio.duration));
+    total.textContent = fmt(audio.duration);
+  });
+  audio.addEventListener('timeupdate', () => {
+    range.value = String(Math.floor(audio.currentTime));
+    current.textContent = fmt(audio.currentTime);
+    if (Math.abs(audio.currentTime - lastSaved) > 5) {
+      lastSaved = audio.currentTime;
+      savePosition();
+    }
+  });
+  audio.addEventListener('ended', () => store.set(`pos:${track?.id}`, 0));
+  window.addEventListener('pagehide', savePosition);
+  document.addEventListener('astro:page-load', syncButtons);
+
+  // Vis forrige episode (pauset) når siden lastes på nytt.
+  const previous = store.get<Track>('current');
+  if (previous) load(previous);
+</script>
+
+<style>
+  .player {
+    position: fixed; inset: auto 0 0 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px max(16px, calc((100% - var(--max)) / 2));
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+  }
+  .player[hidden] { display: none; }
+  .cover img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
+  .info { flex: 1; min-width: 0; }
+  .title {
+    display: block; color: var(--text); font-weight: 650; text-decoration: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .scrub { display: flex; align-items: center; gap: 10px; }
+  .scrub input { flex: 1; accent-color: var(--accent); min-width: 0; }
+  .time { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .controls { display: flex; align-items: center; gap: 6px; }
+  .controls button {
+    border: 0; background: transparent; padding: 8px; border-radius: 999px;
+    font-size: 0.85rem; font-weight: 600; color: var(--muted);
+  }
+  .controls button:hover { color: var(--text); background: var(--surface-2); }
+  .controls .toggle { background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; width: 44px; height: 44px; }
+  .controls .toggle:hover { background: var(--accent); filter: brightness(1.08); color: var(--accent-ink); }
+  .toggle svg { fill: currentColor; }
+  .icon-pause, .is-playing .icon-play { display: none; }
+  .is-playing .icon-pause { display: inline; }
+  .speed { min-width: 44px; }
+
+  @media (max-width: 640px) {
+    .player { flex-wrap: wrap; gap: 8px 12px; }
+    .cover img { width: 44px; height: 44px; }
+    .info { flex-basis: calc(100% - 60px); }
+    .controls { width: 100%; justify-content: center; }
+  }
+</style>

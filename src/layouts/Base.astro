@@ -1,0 +1,131 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import Player from '../components/Player.astro';
+import { LISTEN_LINKS, SOCIAL_LINKS, url } from '../lib/links';
+import { getPodcast, sizedImage } from '../lib/feed';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description: string;
+  image: string;
+  /** JSON-LD for strukturert data. */
+  jsonLd?: object;
+  ogType?: 'website' | 'article';
+}
+
+const { title, description, image, jsonLd, ogType = 'website' } = Astro.props;
+const fullTitle = title ? `${title} – Spæll` : 'Spæll – podcasten om gamle og nye spill';
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const podcast = await getPodcast();
+---
+
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={url('favicon.svg')} type="image/svg+xml" />
+    <link rel="sitemap" href={url('sitemap-index.xml')} />
+    <meta name="theme-color" content="#0f0f12" />
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content="Spæll" />
+    <meta property="og:locale" content="nb_NO" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+
+    <ClientRouter />
+
+    {
+      import.meta.env.PROD && (
+        <script
+          is:inline
+          data-goatcounter="https://spaell.goatcounter.com/count"
+          data-goatcounter-settings='{"no_onload": true}'
+          async
+          src="https://gc.zgo.at/count.js"
+        />
+      )
+    }
+    <script is:inline>
+      // GoatCounter teller hver sidevisning, også de som skjer via ClientRouter.
+      document.addEventListener('astro:page-load', () => {
+        const count = () => window.goatcounter?.count?.({ path: location.pathname });
+        if (window.goatcounter?.count) count();
+        else window.addEventListener('load', count, { once: true });
+      });
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href={url()}>
+          <img src={sizedImage(podcast.image, 'Thumbnail')} alt="" width="32" height="32" />
+          Spæll
+        </a>
+        <nav aria-label="Hovedmeny" class="nav">
+          <a href={url()}>Episoder</a>
+          <a href={url('om/')}>Om</a>
+        </nav>
+        <nav aria-label="Lytt" class="listen">
+          {LISTEN_LINKS.map((l) => <a href={l.href} target="_blank" rel="noopener">{l.label}</a>)}
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <ul class="social">
+          {SOCIAL_LINKS.map((l) => <li><a href={l.href} target="_blank" rel="noopener">{l.label}</a></li>)}
+        </ul>
+        <p class="meta">
+          Uoffisiell fanside, laget med kjærlighet til Spæll. Alt innhold og all lyd tilhører Spæll.
+        </p>
+      </div>
+    </footer>
+
+    <Player />
+  </body>
+</html>
+
+<style>
+  .site-header {
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .header-inner { display: flex; align-items: center; gap: 24px; min-height: 64px; flex-wrap: wrap; padding-block: 8px; }
+  .logo img { border-radius: 6px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.25rem; color: var(--text); text-decoration: none; }
+  .nav, .listen { display: flex; gap: 16px; }
+  .nav a { color: var(--text); text-decoration: none; font-weight: 550; }
+  .nav a:hover { color: var(--accent); }
+  .listen { margin-left: auto; gap: 8px; }
+  .listen a {
+    font-size: 0.85rem; text-decoration: none; color: var(--text);
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px;
+  }
+  .listen a:hover { border-color: var(--accent); color: var(--accent); }
+  @media (max-width: 640px) {
+    .listen { margin-left: 0; width: 100%; overflow-x: auto; }
+  }
+
+  main { min-height: 60vh; }
+
+  .site-footer { border-top: 1px solid var(--border); margin-top: 64px; padding-block: 32px; }
+  .social { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+</style>

@@ -1,0 +1,61 @@
+---
+import Base from '../layouts/Base.astro';
+import { getPodcast, sizedImage } from '../lib/feed';
+import { LISTEN_LINKS, SOCIAL_LINKS } from '../lib/links';
+
+const podcast = await getPodcast();
+const numbered = podcast.episodes.filter((e) => e.number !== null);
+const first = podcast.episodes.at(-1)!;
+const firstYear = first.year;
+const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.duration, 0) / 3600);
+---
+
+<Base title="Om Spæll" description={podcast.description} image={sizedImage(podcast.image, 'Large')}>
+  <article class="wrap about">
+    <img src={sizedImage(podcast.image, 'Large')} alt="Spæll-logoen" width="240" height="240" />
+    <div class="prose">
+      <h1>Om Spæll</h1>
+      <p class="lead">{podcast.description}</p>
+      <p>
+        Spæll er en norsk spillpodcast med <strong>Adrian</strong> og <strong>Håkon</strong>, ofte med gjester fra
+        andre podcaster og spillmiljøet. Podcasten startet som «Spæll-Linja» og har sluppet episoder siden {firstYear}.
+      </p>
+      <ul class="stats">
+        <li><strong>{podcast.episodes.length}</strong> episoder totalt</li>
+        <li><strong>{numbered.length}</strong> nummererte episoder</li>
+        <li><strong>{totalHours}</strong> timer med spillprat</li>
+      </ul>
+
+      <h2>Lytt</h2>
+      <p>
+        {LISTEN_LINKS.map((l, i) => <>{i > 0 && ' · '}<a href={l.href} target="_blank" rel="noopener">{l.label}</a></>)}
+      </p>
+
+      <h2>Følg Spæll</h2>
+      <p>
+        {SOCIAL_LINKS.map((l, i) => <>{i > 0 && ' · '}<a href={l.href} target="_blank" rel="noopener">{l.label}</a></>)}
+      </p>
+      <p>Reklamefrie episoder og bonusinnhold finnes på Patreon via LOLbua.</p>
+
+      <h2>Om denne siden</h2>
+      <p class="meta">
+        Dette er en uoffisiell fanside. Episodelista hentes automatisk fra Spælls RSS-feed, og lyden spilles direkte
+        fra podcastens egen hosting.
+      </p>
+    </div>
+  </article>
+</Base>
+
+<style>
+  .about { display: grid; grid-template-columns: 240px minmax(0, 68ch); gap: 40px; padding-top: 40px; }
+  .about img { border-radius: var(--radius); aspect-ratio: 1; object-fit: cover; }
+  h1 { margin-top: 0; font-size: 2.5rem; }
+  .lead { font-size: 1.2rem; }
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; list-style: none; padding: 0; }
+  .stats li { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
+  .stats strong { display: block; font-size: 1.5rem; color: var(--accent); }
+  @media (max-width: 720px) {
+    .about { grid-template-columns: 1fr; }
+    .about img { max-width: 160px; }
+  }
+</style>

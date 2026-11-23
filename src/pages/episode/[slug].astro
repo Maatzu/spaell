@@ -1,0 +1,125 @@
+---
+import Base from '../../layouts/Base.astro';
+import PlayButton from '../../components/PlayButton.astro';
+import { getPodcast, formatDate, formatDuration, formatTimestamp, sizedImage, TYPE_LABEL, type Episode } from '../../lib/feed';
+import { url } from '../../lib/links';
+
+export async function getStaticPaths() {
+  const { episodes } = await getPodcast();
+  return episodes.map((episode, i) => ({
+    params: { slug: episode.slug },
+    props: { episode, newer: episodes[i - 1], older: episodes[i + 1] },
+  }));
+}
+
+interface Props {
+  episode: Episode;
+  newer?: Episode;
+  older?: Episode;
+}
+
+const { episode, newer, older } = Astro.props;
+const label = episode.number !== null ? `#${episode.number}` : TYPE_LABEL[episode.type];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'PodcastEpisode',
+  name: episode.fullTitle,
+  ...(episode.number !== null && { episodeNumber: episode.number }),
+  datePublished: episode.date,
+  description: episode.summary,
+  image: episode.image,
+  url: new URL(url(`episode/${episode.slug}/`), Astro.site).href,
+  timeRequired: `PT${Math.round(episode.duration / 60)}M`,
+  associatedMedia: { '@type': 'MediaObject', contentUrl: episode.audioUrl },
+  partOfSeries: { '@type': 'PodcastSeries', name: 'Spæll', url: new URL(url(), Astro.site).href },
+};
+---
+
+<Base
+  title={episode.fullTitle}
+  description={episode.summary}
+  image={sizedImage(episode.image, 'Large')}
+  jsonLd={jsonLd}
+  ogType="article"
+>
+  <article class="wrap episode">
+    <a class="back" href={url()}>← Alle episoder</a>
+    <header>
+      <img src={sizedImage(episode.image, 'Large')} alt="" width="360" height="360" />
+      <div>
+        <span class={`badge badge-${episode.type}`}>{label}</span>
+        <h1>{episode.title}</h1>
+        <p class="meta"><time datetime={episode.date}>{formatDate(episode.date)}</time> · {formatDuration(episode.duration)}</p>
+        <PlayButton episode={episode} />
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="prose" set:html={episode.descriptionHtml} />
+
+      {
+        episode.chapters.length > 0 && (
+          <section class="chapters" aria-labelledby="kapitler">
+            <h2 id="kapitler">Kapitler</h2>
+            <ol>
+              {episode.chapters.map((c) => (
+                <li>
+                  <button
+                    type="button"
+                    data-play={episode.id}
+                    data-start={c.start}
+                    data-src={episode.audioUrl}
+                    data-title={episode.fullTitle}
+                    data-image={sizedImage(episode.image, 'Small')}
+                    data-href={url(`episode/${episode.slug}/`)}
+                  >
+                    <span class="ts">{formatTimestamp(c.start)}</span>
+                    {c.title}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )
+      }
+    </div>
+
+    <nav class="pager" aria-label="Flere episoder">
+      {newer ? <a href={url(`episode/${newer.slug}/`)}><span class="meta">Nyere</span>{newer.fullTitle}</a> : <span />}
+      {older && <a class="older" href={url(`episode/${older.slug}/`)}><span class="meta">Eldre</span>{older.fullTitle}</a>}
+    </nav>
+  </article>
+</Base>
+
+<style>
+  .episode { padding-top: 24px; }
+  .back { display: inline-block; margin-bottom: 24px; text-decoration: none; }
+  header { display: grid; grid-template-columns: minmax(0, 280px) 1fr; gap: 32px; align-items: end; margin-bottom: 32px; }
+  header img { border-radius: var(--radius); aspect-ratio: 1; object-fit: cover; }
+  h1 { margin: 10px 0 6px; font-size: clamp(1.8rem, 4vw, 2.75rem); line-height: 1.1; }
+  header .meta { margin: 0 0 18px; }
+  @media (max-width: 640px) {
+    header { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    header img { max-width: 220px; }
+  }
+
+  .content { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; align-items: start; }
+  .prose { max-width: 68ch; font-size: 1.05rem; }
+  @media (max-width: 900px) { .content { grid-template-columns: minmax(0, 1fr); } }
+
+  .chapters { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .chapters h2 { margin: 0 0 8px; font-size: 1.1rem; }
+  .chapters ol { list-style: none; margin: 0; padding: 0; }
+  .chapters button {
+    display: flex; gap: 12px; width: 100%; text-align: left;
+    background: transparent; border: 0; border-radius: 8px; padding: 8px;
+  }
+  .chapters button:hover { background: var(--surface-2); }
+  .ts { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 4.5em; }
+
+  .pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; border-top: 1px solid var(--border); padding-top: 24px; }
+  .pager a { display: flex; flex-direction: column; text-decoration: none; color: var(--text); max-width: 45%; }
+  .pager a:hover { color: var(--accent); }
+  .older { text-align: right; margin-left: auto; }
+</style>
