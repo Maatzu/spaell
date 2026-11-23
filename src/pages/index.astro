@@ -2,11 +2,13 @@
 import Base from '../layouts/Base.astro';
 import EpisodeCard from '../components/EpisodeCard.astro';
 import PlayButton from '../components/PlayButton.astro';
-import { FEED_URL, getPodcast, formatDate, formatDuration, sizedImage, TYPE_LABEL } from '../lib/feed';
-import { url } from '../lib/links';
+import { getPodcast } from '../lib/feed';
+import { episodeLabel, formatDate, formatDuration, sizedImage } from '../lib/format';
+import { FEED_URL, absoluteUrl, episodeUrl } from '../lib/links';
 
 const podcast = await getPodcast();
 const [latest] = podcast.episodes;
+const latestUrl = episodeUrl(latest);
 const years = [...new Set(podcast.episodes.map((e) => e.year))];
 
 const jsonLd = {
@@ -17,27 +19,27 @@ const jsonLd = {
   image: podcast.image,
   inLanguage: 'no',
   webFeed: FEED_URL,
-  url: new URL(url(), Astro.site).href,
+  url: absoluteUrl(),
 };
 ---
 
-<Base description={podcast.description} image={sizedImage(podcast.image, 'Large')} jsonLd={jsonLd}>
+<Base jsonLd={jsonLd}>
   <section class="hero">
     <div class="wrap hero-inner">
-      <a href={url(`episode/${latest.slug}/`)} class="hero-cover">
+      <a href={latestUrl} class="hero-cover">
         <img src={sizedImage(latest.image, 'Large')} alt="" width="480" height="480" />
       </a>
       <div class="hero-text">
         <p class="eyebrow">Siste episode</p>
-        <h1><a href={url(`episode/${latest.slug}/`)}>{latest.title}</a></h1>
+        <h1><a href={latestUrl}>{latest.title}</a></h1>
         <p class="meta">
-          {latest.number !== null ? `#${latest.number}` : TYPE_LABEL[latest.type]}{' · '}
+          {episodeLabel(latest)}{' · '}
           <time datetime={latest.date}>{formatDate(latest.date)}</time> · {formatDuration(latest.duration)}
         </p>
         <p class="summary">{latest.summary}</p>
         <div class="actions">
           <PlayButton episode={latest} />
-          <a class="btn btn-ghost" href={url(`episode/${latest.slug}/`)}>Les mer</a>
+          <a class="btn btn-ghost" href={latestUrl}>Les mer</a>
         </div>
       </div>
     </div>
@@ -84,7 +86,7 @@ const jsonLd = {
 </Base>
 
 <script>
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  import { withViewTransition } from '../lib/transition';
 
   /** Gir kortene i synsfeltet et view-transition-navn, slik at de glir til ny plass. */
   function nameVisibleCards(cards: HTMLElement[]) {
@@ -101,19 +103,13 @@ const jsonLd = {
   let current: ViewTransition | undefined;
 
   function animate(cards: HTMLElement[], update: () => void) {
-    if (!document.startViewTransition || reducedMotion.matches) return update();
+    // Navnene settes før og etter oppdateringen, så kort som kommer til eller forsvinner også animeres.
     nameVisibleCards(cards);
-    const run = () => {
+    const transition = withViewTransition(() => {
       update();
       nameVisibleCards(cards);
-    };
-    let transition: ViewTransition;
-    try {
-      transition = document.startViewTransition({ update: run, types: ['filter'] });
-    } catch {
-      // Eldre nettlesere støtter bare en callback, uten typer.
-      transition = document.startViewTransition(run);
-    }
+    }, 'filter');
+    if (!transition) return;
     current = transition;
     // En ny overgang avbryter den forrige; da skal ikke den gamle rydde bort navnene.
     transition.ready.catch(() => {});

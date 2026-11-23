@@ -1,9 +1,11 @@
 ---
+import PlayPauseIcon from './PlayPauseIcon.astro';
+
 /*
  * Avspilleren ligger nederst og overlever sidebytter (transition:persist).
  * Alle elementer med data-play starter en episode:
  *   data-play="<id>" data-src data-title data-image data-href data-duration [data-chapters=JSON] [data-start=sekunder]
- * Attributtene lages av playData() i src/lib/play.ts.
+ * Attributtene lages av playData() og leses av readTrack() i src/lib/play.ts.
  */
 ---
 
@@ -27,7 +29,7 @@
   <div class="controls">
     <button type="button" data-skip="-15" aria-label="Spol 15 sekunder tilbake">−15</button>
     <button type="button" class="toggle" data-toggle aria-label="Spill av">
-      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path class="icon-play" d="M8 5v14l11-7z" /><path class="icon-pause" d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+      <PlayPauseIcon size={24} />
     </button>
     <button type="button" data-skip="30" aria-label="Spol 30 sekunder frem">+30</button>
     <button type="button" class="speed" data-speed aria-label="Avspillingshastighet">1×</button>
@@ -41,11 +43,11 @@
 </div>
 
 <script>
+  import { formatTimestamp } from '../lib/format';
+  import { readTrack, type Track } from '../lib/play';
+
   const STORAGE_PREFIX = 'spaell:';
   const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
-
-  type Chapter = { start: number; title: string };
-  type Track = { id: string; src: string; title: string; image: string; href: string; duration: number; chapters: Chapter[] };
 
   const store = {
     get<T>(key: string): T | null {
@@ -78,14 +80,6 @@
   let lastSaved = 0;
   let activeChapter = -1;
 
-  const fmt = (s: number) => {
-    s = Math.floor(s || 0);
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = String(s % 60).padStart(2, '0');
-    return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
-  };
-
   function savePosition() {
     if (track) store.set(`pos:${track.id}`, Math.floor(audio.currentTime));
   }
@@ -102,7 +96,7 @@
         btn.dataset.index = String(i);
         const ts = document.createElement('span');
         ts.className = 'ts';
-        ts.textContent = fmt(c.start);
+        ts.textContent = formatTimestamp(c.start);
         btn.append(ts, c.title);
         li.append(btn);
         return li;
@@ -153,18 +147,22 @@
       root.querySelectorAll<HTMLAnchorElement>('[data-link]').forEach((a) => (a.href = next.href));
       root.querySelector('.title')!.textContent = next.title;
       range.max = String(next.duration);
-      total.textContent = fmt(next.duration);
+      total.textContent = formatTimestamp(next.duration);
       renderChapters();
       root.hidden = false;
-      document.documentElement.style.setProperty('--player-h', `${root.offsetHeight}px`);
       const resumeAt = start ?? store.get<number>(`pos:${next.id}`) ?? 0;
       range.value = String(resumeAt);
-      current.textContent = fmt(resumeAt);
+      current.textContent = formatTimestamp(resumeAt);
       updateChapter(resumeAt);
       audio.addEventListener('loadedmetadata', () => (audio.currentTime = resumeAt), { once: true });
     } else if (start !== undefined) {
       audio.currentTime = start;
     }
+  }
+
+  function togglePlayback() {
+    if (audio.paused) audio.play();
+    else audio.pause();
   }
 
   function syncButtons() {
@@ -183,18 +181,13 @@
     const el = (e.target as Element).closest<HTMLElement>('[data-play]');
     if (!el) return;
     e.preventDefault();
-    const d = el.dataset;
-    const start = d.start !== undefined ? Number(d.start) : undefined;
-    if (d.play === track?.id && start === undefined) {
-      audio.paused ? audio.play() : audio.pause();
-      return;
-    }
-    const chapters: Chapter[] = d.chapters ? JSON.parse(d.chapters) : [];
-    load({ id: d.play!, src: d.src!, title: d.title!, image: d.image!, href: d.href!, duration: Number(d.duration) || 0, chapters }, start);
+    const start = el.dataset.start !== undefined ? Number(el.dataset.start) : undefined;
+    if (el.dataset.play === track?.id && start === undefined) return togglePlayback();
+    load(readTrack(el.dataset), start);
     audio.play();
   });
 
-  toggle.addEventListener('click', () => (audio.paused ? audio.play() : audio.pause()));
+  toggle.addEventListener('click', togglePlayback);
   root.querySelectorAll<HTMLButtonElement>('[data-skip]').forEach((b) =>
     b.addEventListener('click', () => (audio.currentTime += Number(b.dataset.skip))),
   );
@@ -235,12 +228,12 @@
   });
   audio.addEventListener('loadedmetadata', () => {
     range.max = String(Math.floor(audio.duration));
-    total.textContent = fmt(audio.duration);
+    total.textContent = formatTimestamp(audio.duration);
     renderMarkers();
   });
   audio.addEventListener('timeupdate', () => {
     range.value = String(Math.floor(audio.currentTime));
-    current.textContent = fmt(audio.currentTime);
+    current.textContent = formatTimestamp(audio.currentTime);
     updateChapter();
     if (Math.abs(audio.currentTime - lastSaved) > 5) {
       lastSaved = audio.currentTime;
@@ -250,6 +243,11 @@
   audio.addEventListener('ended', () => store.set(`pos:${track?.id}`, 0));
   window.addEventListener('pagehide', savePosition);
   document.addEventListener('astro:page-load', syncButtons);
+
+  // Siden får luft nederst tilsvarende avspillerens høyde, som endres når den brytes over flere linjer.
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty('--player-h', `${root.offsetHeight}px`);
+  }).observe(root);
 
   // Vis forrige episode (pauset) når siden lastes på nytt.
   const previous = store.get<Track>('current');
@@ -301,10 +299,7 @@
   }
   .controls button:hover { color: var(--text); background: var(--surface-2); }
   .controls .toggle { background: var(--red); color: var(--accent-ink); display: grid; place-items: center; width: 44px; height: 44px; }
-  .controls .toggle:hover { background: #e0000c; color: var(--accent-ink); }
-  .toggle svg { fill: currentColor; }
-  .icon-pause, .is-playing .icon-play { display: none; }
-  .is-playing .icon-pause { display: inline; }
+  .controls .toggle:hover { background: var(--red-hover); color: var(--accent-ink); }
   .speed { width: 3.8em; font-variant-numeric: tabular-nums; }
 
   .chapters-menu { position: relative; display: flex; }

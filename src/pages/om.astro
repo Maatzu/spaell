@@ -1,16 +1,20 @@
 ---
 import Base from '../layouts/Base.astro';
-import { getPodcast, sizedImage } from '../lib/feed';
-import { LISTEN_LINKS, SOCIAL_LINKS } from '../lib/links';
+import { getPodcast } from '../lib/feed';
+import { sizedImage } from '../lib/format';
+import { LISTEN_LINKS, PATREON_URL, SOCIAL_LINKS } from '../lib/links';
 
 const podcast = await getPodcast();
 const numbered = podcast.episodes.filter((e) => e.number !== null);
-const first = podcast.episodes.at(-1)!;
-const firstYear = first.year;
+const firstYear = podcast.episodes.at(-1)!.year;
+const linkSections = [
+  { heading: 'Lytt', links: LISTEN_LINKS },
+  { heading: 'Følg Spæll', links: SOCIAL_LINKS },
+];
 const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.duration, 0) / 3600);
 ---
 
-<Base title="Om Spæll" description={podcast.description} image={sizedImage(podcast.image, 'Large')}>
+<Base title="Om Spæll">
   <article class="wrap about">
     <img src={sizedImage(podcast.image, 'Large')} alt="Spæll-logoen" width="240" height="240" />
     <div class="prose">
@@ -38,18 +42,17 @@ const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.durati
           Ikke la deg forvirre av navnet: Spæll er en del av podcastfamilien <strong>LOLbua</strong>, så Patreon-siden
           heter LOLbua. Støtter du der, støtter du også Spæll.
         </p>
-        <a class="btn" href="https://www.patreon.com/lolbua" target="_blank" rel="noopener">Støtt via LOLbua på Patreon</a>
+        <a class="btn" href={PATREON_URL} target="_blank" rel="noopener">Støtt via LOLbua på Patreon</a>
       </aside>
 
-      <h2>Lytt</h2>
-      <p>
-        {LISTEN_LINKS.map((l, i) => <>{i > 0 && ' · '}<a href={l.href} target="_blank" rel="noopener">{l.label}</a></>)}
-      </p>
-
-      <h2>Følg Spæll</h2>
-      <p>
-        {SOCIAL_LINKS.map((l, i) => <>{i > 0 && ' · '}<a href={l.href} target="_blank" rel="noopener">{l.label}</a></>)}
-      </p>
+      {
+        linkSections.map(({ heading, links }) => (
+          <>
+            <h2>{heading}</h2>
+            <p>{links.map((l, i) => <>{i > 0 && ' · '}<a href={l.href} target="_blank" rel="noopener">{l.label}</a></>)}</p>
+          </>
+        ))
+      }
 
       <h2>Om denne siden</h2>
       <p class="meta">

@@ -1,8 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import sanitizeHtml from 'sanitize-html';
-
-export const FEED_URL =
-  'https://www.omnycontent.com/d/playlist/d79bdbb3-8eae-4ad2-b1f6-b0bc00cd1540/b0b974e4-d76a-4f77-905a-b3ef00b49619/12340bdf-8da5-4473-88e7-b3ef00b49642/podcast.rss';
+import { FEED_URL } from './links';
 
 export type EpisodeType = 'episode' | 'spaellbreak' | 'spesial';
 
@@ -56,7 +54,7 @@ const ENTITIES: Record<string, string> = {
   eacute: 'é', hellip: '…', ndash: '–', mdash: '—', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
 };
 
-export function decodeEntities(s: string): string {
+function decodeEntities(s: string): string {
   return s
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
@@ -84,17 +82,13 @@ function parseTime(t: string): number {
   return t.split(':').reduce((acc, part) => acc * 60 + Number(part), 0);
 }
 
-export function slugify(s: string): string {
+function slugify(s: string): string {
   return s
     .toLowerCase()
     .replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/å/g, 'a')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-}
-
-export function sizedImage(url: string, size: string): string {
-  return url.replace(/([?&])size=\w+/, `$1size=${size}`);
 }
 
 const asArray = <T,>(x: T | T[] | undefined): T[] => (x === undefined ? [] : Array.isArray(x) ? x : [x]);
@@ -169,27 +163,3 @@ export function getPodcast(): Promise<Podcast> {
     .then(parseFeed);
   return cached;
 }
-
-export function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  return h > 0 ? `${h} t ${m} min` : `${m} min`;
-}
-
-export function formatDate(iso: string, month: 'long' | 'short' = 'long'): string {
-  return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month, year: 'numeric', timeZone: 'Europe/Oslo' });
-}
-
-export function formatTimestamp(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const mm = String(m).padStart(h ? 2 : 1, '0');
-  return `${h ? h + ':' : ''}${mm}:${String(s).padStart(2, '0')}`;
-}
-
-export const TYPE_LABEL: Record<EpisodeType, string> = {
-  episode: 'Episode',
-  spaellbreak: 'SpællBreak',
-  spesial: 'Spesial',
-};

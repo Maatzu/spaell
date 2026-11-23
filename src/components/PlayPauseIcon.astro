@@ -1,0 +1,13 @@
+---
+/* Viser play, eller pause når en forelder har klassen is-playing (se global.css). */
+interface Props {
+  size: number;
+}
+
+const { size } = Astro.props;
+---
+
+<svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
+  <path class="icon-play" d="M8 5v14l11-7z" />
+  <path class="icon-pause" d="M6 5h4v14H6zM14 5h4v14h-4z" />
+</svg>
