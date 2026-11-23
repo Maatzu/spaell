@@ -1,7 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
+import { Image } from 'astro:assets';
 import { getPodcast, sizedImage } from '../lib/feed';
 import { LISTEN_LINKS, SOCIAL_LINKS } from '../lib/links';
+import LinkIcon from '../components/LinkIcon.astro';
 
 const podcast = await getPodcast();
 const numbered = podcast.episodes.filter((e) => e.number !== null);
@@ -12,10 +14,9 @@ const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.durati
 
 <Base title="Om Spæll" description={podcast.description} image={sizedImage(podcast.image, 'Large')}>
   <article class="wrap about">
-    <img src={sizedImage(podcast.image, 'Large')} alt="Spæll-logoen" width="240" height="240" />
+    <Image src={sizedImage(podcast.image, 'Medium')} alt="Spæll-logoen" width={240} height={240} densities={[1, 2]} loading="eager" />
     <div class="prose">
-      <p class="greeting" aria-hidden="true">Hallais!</p>
-      <h1>Om Spæll</h1>
+      <h1 class="greeting"><span aria-hidden="true">Hallais!</span><span class="visually-hidden">Om Spæll</span></h1>
       <p class="lead">{podcast.description}</p>
       <p>
         Spæll er en norsk spillpodcast med <strong>Adrian</strong> og <strong>Håkon</strong>, ofte med gjester fra
@@ -42,14 +43,14 @@ const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.durati
       </aside>
 
       <h2>Lytt</h2>
-      <p>
-        {LISTEN_LINKS.map((l, i) => <>{i > 0 && ' · '}<a href={l.href} target="_blank" rel="noopener">{l.label}</a></>)}
-      </p>
+      <ul class="links">
+        {LISTEN_LINKS.map((l) => <li><a href={l.href} target="_blank" rel="noopener"><LinkIcon name={l.icon} size={18} />{l.label}</a></li>)}
+      </ul>
 
       <h2>Følg Spæll</h2>
-      <p>
-        {SOCIAL_LINKS.map((l, i) => <>{i > 0 && ' · '}<a href={l.href} target="_blank" rel="noopener">{l.label}</a></>)}
-      </p>
+      <ul class="links">
+        {SOCIAL_LINKS.map((l) => <li><a href={l.href} target="_blank" rel="noopener"><LinkIcon name={l.icon} size={18} />{l.label}</a></li>)}
+      </ul>
 
       <h2>Om denne siden</h2>
       <p class="meta">
@@ -63,7 +64,8 @@ const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.durati
 <style>
   .about { display: grid; grid-template-columns: 240px minmax(0, 68ch); gap: 40px; padding-top: 40px; }
   .about img { border-radius: var(--radius); aspect-ratio: 1; object-fit: cover; }
-  h1 { margin-top: 0; font-size: 2.5rem; }
+  /* Logoens hvite JPEG-bakgrunn smelter inn i siden i lyst tema. */
+  :global([data-theme='light']) .about img { mix-blend-mode: multiply; }
   .greeting {
     margin: 0 0 4px; font-size: clamp(2.5rem, 7vw, 4rem); font-weight: 900; font-style: italic; line-height: 1;
     color: var(--red); -webkit-text-stroke: 2px var(--text); paint-order: stroke fill; letter-spacing: -0.02em;
@@ -79,6 +81,8 @@ const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.durati
   .stats { display: flex; flex-wrap: wrap; gap: 12px; list-style: none; padding: 0; }
   .stats li { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--red); border-radius: var(--radius); padding: 12px 16px; }
   .stats strong { display: block; font-size: 1.5rem; color: var(--accent); }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; padding: 0; }
+  .links a { display: inline-flex; align-items: center; gap: 8px; }
   @media (max-width: 720px) {
     .about { grid-template-columns: 1fr; }
     .about img { max-width: 160px; }
