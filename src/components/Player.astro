@@ -5,7 +5,8 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
  * Avspilleren ligger nederst og overlever sidebytter (transition:persist).
  * Alle elementer med data-play starter en episode:
  *   data-play="<id>" data-src data-title data-image data-href data-duration [data-chapters=JSON] [data-start=sekunder]
- * Attributtene lages av playData() og leses av readTrack() i src/lib/play.ts.
+ * Attributtene lages av playData() og leses av readTrack()/readStart() i src/lib/play.ts,
+ * og markPlaying() der bestemmer hvordan hver knapp viser at den spiller.
  */
 ---
 
@@ -69,27 +70,11 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
 <script>
   import type { Chapter } from '../lib/feed';
   import { formatTimestamp } from '../lib/format';
-  import { readTrack, type Track } from '../lib/play';
+  import { markPlaying, readStart, readTrack, type Track } from '../lib/play';
+  import { store } from '../lib/storage';
   import { withViewTransition } from '../lib/transition';
 
-  const STORAGE_PREFIX = 'spaell:';
   const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
-
-  const store = {
-    get<T>(key: string): T | null {
-      try {
-        const v = localStorage.getItem(STORAGE_PREFIX + key);
-        return v === null ? null : (JSON.parse(v) as T);
-      } catch {
-        return null;
-      }
-    },
-    set(key: string, value: unknown) {
-      try {
-        localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
-      } catch {}
-    },
-  };
 
   const root = document.getElementById('player')!;
   const audio = root.querySelector('audio')!;
@@ -275,21 +260,16 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     const playing = !audio.paused;
     root.classList.toggle('is-playing', playing);
     toggle.setAttribute('aria-label', playing ? 'Pause' : 'Spill av');
-    document.querySelectorAll<HTMLElement>('[data-play]:not([data-start])').forEach((el) => {
-      const active = playing && el.dataset.play === track?.id;
-      el.classList.toggle('is-playing', active);
-      const label = el.querySelector('[data-play-label]');
-      if (label) label.textContent = active ? 'Pause' : 'Spill av';
-      // Coverknappene på kortene har bare aria-label, så den må også si «Pause» når episoden spiller.
-      if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', `${active ? 'Pause' : 'Spill av'} ${el.dataset.title}`);
-    });
+    document
+      .querySelectorAll<HTMLElement>('[data-play]')
+      .forEach((el) => markPlaying(el, playing && el.dataset.play === track?.id));
   }
 
   document.addEventListener('click', (e) => {
     const el = (e.target as Element).closest<HTMLElement>('[data-play]');
     if (!el) return;
     e.preventDefault();
-    const start = el.dataset.start !== undefined ? Number(el.dataset.start) : undefined;
+    const start = readStart(el.dataset);
     if (el.dataset.play === track?.id && start === undefined) return togglePlayback();
     load(readTrack(el.dataset), start);
     audio.play();

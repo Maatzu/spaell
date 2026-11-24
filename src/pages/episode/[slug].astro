@@ -131,8 +131,7 @@ const jsonLd = {
                 <li>
                   <button
                     type="button"
-                    {...playData(episode)}
-                    data-start={c.start}
+                    {...playData(episode, { start: c.start })}
                   >
                     <span class="ts">{formatTimestamp(c.start)}</span>
                     {c.title}

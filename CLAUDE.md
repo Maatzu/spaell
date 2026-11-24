@@ -11,17 +11,18 @@ Unofficial fan site (Astro, fully static) listing every episode of the Norwegian
 ```sh
 npm install
 npm run dev      # http://localhost:4321/  (base is / in dev, /spaell in build/preview)
-npm run build    # also the only "test": type-checks .astro/.ts and fetches the live feed
+npm run build    # type-checks .astro/.ts and fetches the live feed
 npm run preview
+npm test         # checks feed parsing against test/feed.rss, offline (node --test, Node ≥ 22.18 for .ts)
 ```
 
-There is no test suite or linter. TypeScript uses `astro/tsconfigs/strict`.
+`npm test` is the only test, and there is no linter. TypeScript uses `astro/tsconfigs/strict`.
 
 The user usually has `astro dev` running already (often on port 4322). Starting another one just prints "already running", so check that server instead. To check layout, use headless Chrome. Plain `--window-size` can't go narrower than 500px. For phone widths, drive Chrome over CDP with `Emulation.setDeviceMetricsOverride` (`mobile: true`). Real clicks via `Input.dispatchMouseEvent` are needed to open the styled `<select>` pickers. Headless Chrome blocks autoplay, so "is playing" UI has to be forced by adding the `is-playing` class.
 
 ## Architecture
 
-**Data comes from the live RSS feed at build time.** `src/lib/feed.ts` fetches the Omny RSS feed (`FEED_URL`) once per build (`getPodcast()` caches the promise) and parses it into `Podcast`/`Episode` objects. The build fails if the feed can't be fetched, so builds need network access. There's no content collection or local data. Parsing details that matter:
+**Data comes from the live RSS feed at build time.** `src/lib/feed.ts` fetches the Omny RSS feed (`FEED_URL`) once per build (`getPodcast()` caches the promise), parses it with `parseFeed()` from `src/lib/parse-feed.ts` into `Podcast`/`Episode` objects, then adds tags and Spotify links. `parse-feed.ts` must only import npm packages and types (no Astro modules, no extensionless value imports) so `npm test` can run it in plain Node. `test/feed.rss` is a trimmed copy of the feed with one normal episode, one SpællBreak and one spesial. The build fails if the feed can't be fetched, so builds need network access. There's no content collection or local data. Parsing details that matter:
 - Episode number is pulled from `#NNN` in the title; titles without a number are `spesial`, titles starting with "SpællBreak" are `spaellbreak`.
 - Descriptions drop the recurring link boilerplate (`BOILERPLATE` regexes) and are sanitized with `sanitize-html`.
 - Chapters come from `psc:chapters`.
@@ -60,7 +61,7 @@ All pages use `layouts/Base.astro`, which holds the header (with active-menu mar
   - `jump` / `jump-up` / `jump-down`: same-page anchor links, intercepted in a capture-phase click listener in `Base.astro`.
   - `player`: minimizing/expanding the player.
 
-**Player contract:** any element with `data-play` starts an episode. A document-level click listener in `Player.astro` handles the click. Produce the attributes with `playData(episode)` in `src/lib/play.ts` rather than writing them by hand. Add `data-start="<seconds>"` to jump to a timestamp (used for chapter links). The player stores state in `localStorage` under the `spaell:` prefix: `pos:<id>` for resume position, plus `speed`, `current` (last track, `null` after close), `minimized` and `theme`. Every storage access is wrapped in try/catch.
+**Player contract:** any element with `data-play` starts an episode. A document-level click listener in `Player.astro` handles the click. `src/lib/play.ts` owns the whole contract: produce the attributes with `playData(episode, { start?, ariaLabel? })` rather than writing them by hand. `start` (seconds) jumps to a timestamp (chapter links); `ariaLabel` is for buttons without visible text. `markPlaying(el, active)` decides how a button shows it is playing (`is-playing`, the `[data-play-label]` text, the aria-label; buttons with a start point are never marked), so the player only calls it on every `[data-play]`. The player stores state in `localStorage` under the `spaell:` prefix: `pos:<id>` for resume position, plus `speed`, `current` (last track, `null` after close), `minimized` and `theme`. All of it goes through `store` in `src/lib/storage.ts`, which adds the prefix and wraps every access in try/catch (`get`/`set` for JSON, `getText`/`setText` for plain text). The theme is plain text because the inline theme script in `Base.astro` reads it directly and keeps its own copy of the rule.
 
 Player layout:
 - **Full bar:** three areas (now / center / side).

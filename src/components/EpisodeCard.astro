@@ -22,8 +22,7 @@ const badgeClass = episode.number !== null ? 'badge' : `badge badge-${episode.ty
   <button
     type="button"
     class="cover"
-    {...playData(episode)}
-    aria-label={`Spill av ${episode.fullTitle}`}
+    {...playData(episode, { ariaLabel: true })}
   >
     <Image src={sizedImage(episode.image, 'Medium')} alt="" width={400} height={400} widths={[200, 400]} sizes="(max-width: 420px) 50vw, 200px" loading={eager ? 'eager' : 'lazy'} />
     <span class="play" aria-hidden="true">

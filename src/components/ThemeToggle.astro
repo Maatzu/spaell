@@ -1,7 +1,8 @@
 ---
 /*
  * Bytter mellom lyst og mørkt tema. Selve temaet settes av det inline skriptet i
- * Base.astro, som lytter etter «spaell:theme» og leser valget fra localStorage.
+ * Base.astro, som lytter etter «spaell:theme» og leser valget fra localStorage. Valget lagres
+ * som ren tekst (ikke JSON), fordi skriptet leser det direkte.
  */
 ---
 
@@ -11,6 +12,7 @@
 </button>
 
 <script>
+  import { store } from '../lib/storage';
   import { withViewTransition } from '../lib/transition';
 
   // Lytter på document, så knappen virker også etter sidebytter i ClientRouter.
@@ -18,9 +20,7 @@
     if (!(e.target as Element).closest('[data-theme-toggle]')) return;
     const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
     withViewTransition(() => {
-      try {
-        localStorage.setItem('spaell:theme', next);
-      } catch {}
+      store.setText('theme', next);
       document.dispatchEvent(new Event('spaell:theme'));
     }, 'theme');
   });
