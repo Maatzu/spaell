@@ -34,11 +34,20 @@ export function readEntry(d: DOMStringMap): SearchEntry {
   return { text: d.search!, year: Number(d.year), type: d.type as EpisodeType };
 }
 
+/**
+ * Treffer der søkeordet står først i et ord, så «pc» ikke treffer «capcom», mens
+ * «zel» treffer «zelda» og «120» treffer «#120». Uten lookbehind, som eldre Safari mangler.
+ */
+function wordStart(term: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}`, 'u');
+}
+
 /** Lager en test for filteret, slik at søket deles opp én gang og ikke per kort. */
 export function matcher(filter: Filter): (entry: SearchEntry) => boolean {
-  const terms = filter.query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const terms = filter.query.toLowerCase().trim().split(/\s+/).filter(Boolean).map(wordStart);
   return (entry) =>
-    terms.every((t) => entry.text.includes(t)) &&
+    terms.every((t) => t.test(entry.text)) &&
     entry.year >= filter.from &&
     entry.year <= filter.to &&
     (!filter.type || entry.type === filter.type);
