@@ -1,9 +1,11 @@
 ---
+import PlayPauseIcon from './PlayPauseIcon.astro';
+
 /*
  * Avspilleren ligger nederst og overlever sidebytter (transition:persist).
  * Alle elementer med data-play starter en episode:
  *   data-play="<id>" data-src data-title data-image data-href data-duration [data-chapters=JSON] [data-start=sekunder]
- * Attributtene lages av playData() i src/lib/play.ts.
+ * Attributtene lages av playData() og leses av readTrack() i src/lib/play.ts.
  */
 ---
 
@@ -25,7 +27,7 @@
       <div class="controls">
         <button type="button" data-skip="-15" aria-label="Spol 15 sekunder tilbake">−15</button>
         <button type="button" class="toggle" data-toggle aria-label="Spill av">
-          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path class="icon-play" d="M8 5v14l11-7z" /><path class="icon-pause" d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+          <PlayPauseIcon size={24} />
         </button>
         <button type="button" data-skip="30" aria-label="Spol 30 sekunder frem">+30</button>
       </div>
@@ -65,11 +67,13 @@
 </div>
 
 <script>
+  import type { Chapter } from '../lib/feed';
+  import { formatTimestamp } from '../lib/format';
+  import { readTrack, type Track } from '../lib/play';
+  import { withViewTransition } from '../lib/transition';
+
   const STORAGE_PREFIX = 'spaell:';
   const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
-
-  type Chapter = { start: number; title: string };
-  type Track = { id: string; src: string; title: string; image: string; href: string; duration: number; chapters: Chapter[] };
 
   const store = {
     get<T>(key: string): T | null {
@@ -108,13 +112,17 @@
   let lastSaved = 0;
   let activeChapter = -1;
 
-  const fmt = (s: number) => {
-    s = Math.floor(s || 0);
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = String(s % 60).padStart(2, '0');
-    return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
-  };
+  /** Indeksen til kapittelet som spilles på tidspunktet, eller -1 før det første. */
+  function chapterAt(chapters: Chapter[], time: number): number {
+    let index = -1;
+    for (let i = 0; i < chapters.length; i++) if (chapters[i].start <= time) index = i;
+    return index;
+  }
+
+  /** Varigheten fra lydfila når den er lastet, ellers fra feeden. */
+  function knownDuration(): number {
+    return audio.duration || track?.duration || 0;
+  }
 
   function savePosition() {
     if (track) store.set(`pos:${track.id}`, Math.floor(audio.currentTime));
@@ -132,7 +140,7 @@
         btn.dataset.index = String(i);
         const ts = document.createElement('span');
         ts.className = 'ts';
-        ts.textContent = fmt(c.start);
+        ts.textContent = formatTimestamp(c.start);
         btn.append(ts, c.title);
         li.append(btn);
         return li;
@@ -145,8 +153,7 @@
 
   function renderMarkers() {
     const chapters = track?.chapters ?? [];
-    // Før lyden er lastet bruker vi varigheten fra feeden.
-    const duration = audio.duration || track?.duration || 0;
+    const duration = knownDuration();
     markers.replaceChildren(
       ...(duration > 0 ? chapters.slice(1) : []).map((c) => {
         const tick = document.createElement('span');
@@ -159,15 +166,14 @@
   // Viser kapittelet (og tidspunktet) under musepekeren når man holder over tidslinja.
   function showHoverTip(e: PointerEvent) {
     const chapters = track?.chapters ?? [];
-    const duration = audio.duration || track?.duration || 0;
+    const duration = knownDuration();
     if (e.pointerType === 'touch' || chapters.length === 0 || duration <= 0) return hideHoverTip();
     // Samme innrykk som markørene, så posisjonen stemmer med tommelen på slideren.
     const box = markers.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
     const time = ratio * duration;
-    let index = 0;
-    for (let i = 0; i < chapters.length; i++) if (chapters[i].start <= time) index = i;
-    hoverTip.textContent = `${fmt(time)} · ${chapters[index].title}`;
+    const index = Math.max(0, chapterAt(chapters, time));
+    hoverTip.textContent = `${formatTimestamp(time)} · ${chapters[index].title}`;
     hoverTip.hidden = false;
     // Hold boblen innenfor tidslinja i begge ender.
     const half = hoverTip.offsetWidth / 2;
@@ -182,8 +188,7 @@
 
   function updateChapter(time = audio.currentTime) {
     const chapters = track?.chapters ?? [];
-    let index = -1;
-    for (let i = 0; i < chapters.length; i++) if (chapters[i].start <= time) index = i;
+    const index = chapterAt(chapters, time);
     if (index === activeChapter) return;
     activeChapter = index;
     // Første kapittel heter ofte det samme som episoden; da viser vi det ikke to ganger.
@@ -207,12 +212,12 @@
       root.querySelectorAll<HTMLAnchorElement>('[data-link]').forEach((a) => (a.href = next.href));
       root.querySelector('.title')!.textContent = next.title;
       range.max = String(next.duration);
-      total.textContent = fmt(next.duration);
+      total.textContent = formatTimestamp(next.duration);
       renderChapters();
       root.hidden = false;
       const resumeAt = start ?? store.get<number>(`pos:${next.id}`) ?? 0;
       range.value = String(resumeAt);
-      current.textContent = fmt(resumeAt);
+      current.textContent = formatTimestamp(resumeAt);
       updateChapter(resumeAt);
       audio.addEventListener('loadedmetadata', () => (audio.currentTime = resumeAt), { once: true });
     } else if (start !== undefined) {
@@ -232,19 +237,11 @@
       hideHoverTip();
     };
     store.set('minimized', minimized);
-    const done = () => (minimized ? expandBtn : minimizeBtn).focus({ preventScroll: true });
     if (!animate) return update();
-    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      update();
-      return done();
-    }
-    let transition: ViewTransition;
-    try {
-      transition = document.startViewTransition({ update, types: ['player'] });
-    } catch {
-      transition = document.startViewTransition(update);
-    }
-    transition.updateCallbackDone.then(done);
+    const done = () => (minimized ? expandBtn : minimizeBtn).focus({ preventScroll: true });
+    const transition = withViewTransition(update, 'player');
+    if (transition) transition.updateCallbackDone.then(done);
+    else done();
   }
 
   // Stopper avspillingen og fjerner avspilleren. Posisjonen i episoden huskes til neste gang.
@@ -261,6 +258,11 @@
     root.classList.remove('is-minimized');
     store.set('minimized', false);
     syncButtons();
+  }
+
+  function togglePlayback() {
+    if (audio.paused) audio.play();
+    else audio.pause();
   }
 
   function syncButtons() {
@@ -281,18 +283,13 @@
     const el = (e.target as Element).closest<HTMLElement>('[data-play]');
     if (!el) return;
     e.preventDefault();
-    const d = el.dataset;
-    const start = d.start !== undefined ? Number(d.start) : undefined;
-    if (d.play === track?.id && start === undefined) {
-      audio.paused ? audio.play() : audio.pause();
-      return;
-    }
-    const chapters: Chapter[] = d.chapters ? JSON.parse(d.chapters) : [];
-    load({ id: d.play!, src: d.src!, title: d.title!, image: d.image!, href: d.href!, duration: Number(d.duration) || 0, chapters }, start);
+    const start = el.dataset.start !== undefined ? Number(el.dataset.start) : undefined;
+    if (el.dataset.play === track?.id && start === undefined) return togglePlayback();
+    load(readTrack(el.dataset), start);
     audio.play();
   });
 
-  toggle.addEventListener('click', () => (audio.paused ? audio.play() : audio.pause()));
+  toggle.addEventListener('click', togglePlayback);
   root.querySelectorAll<HTMLButtonElement>('[data-skip]').forEach((b) =>
     b.addEventListener('click', () => (audio.currentTime += Number(b.dataset.skip))),
   );
@@ -338,12 +335,12 @@
   });
   audio.addEventListener('loadedmetadata', () => {
     range.max = String(Math.floor(audio.duration));
-    total.textContent = fmt(audio.duration);
+    total.textContent = formatTimestamp(audio.duration);
     renderMarkers();
   });
   audio.addEventListener('timeupdate', () => {
     range.value = String(Math.floor(audio.currentTime));
-    current.textContent = fmt(audio.currentTime);
+    current.textContent = formatTimestamp(audio.currentTime);
     updateChapter();
     if (Math.abs(audio.currentTime - lastSaved) > 5) {
       lastSaved = audio.currentTime;
@@ -428,10 +425,7 @@
   }
   .bar button:hover { color: var(--text); background: var(--surface-2); }
   .bar .toggle { background: var(--red); color: var(--accent-ink); display: grid; place-items: center; width: 40px; height: 40px; }
-  .bar .toggle:hover { background: #e0000c; color: var(--accent-ink); }
-  .toggle svg { fill: currentColor; }
-  .icon-pause, .is-playing .icon-play { display: none; }
-  .is-playing .icon-pause { display: inline; }
+  .bar .toggle:hover { background: var(--red-hover); color: var(--accent-ink); }
 
   /* Høyre: kapitler, hastighet og minimer. */
   .side { grid-area: side; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }

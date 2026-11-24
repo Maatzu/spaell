@@ -25,6 +25,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: withastro/action@v6
+        env:
+          # Til «Spill av i Spotify»-lenkene; uten dem lenker knappen til programsiden.
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
 
   deploy:
     needs: build

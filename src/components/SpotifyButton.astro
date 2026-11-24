@@ -1,0 +1,17 @@
+---
+import type { Episode } from '../lib/feed';
+import LinkIcon from './LinkIcon.astro';
+
+const { episode } = Astro.props as { episode: Episode };
+---
+
+<a class="btn btn-ghost" href={episode.spotifyUrl} target="_blank" rel="noopener" aria-label="Spill av i Spotify">
+  <LinkIcon name="spotify" size={18} />
+  <span><span class="long">Spill av i </span>Spotify</span>
+</a>
+
+<style>
+  @media (max-width: 760px) {
+    .long { display: none; }
+  }
+</style>

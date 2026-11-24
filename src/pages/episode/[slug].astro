@@ -2,8 +2,10 @@
 import Base from '../../layouts/Base.astro';
 import { Image } from 'astro:assets';
 import PlayButton from '../../components/PlayButton.astro';
-import { getPodcast, formatDate, formatDuration, formatTimestamp, sizedImage, TYPE_LABEL, type Episode } from '../../lib/feed';
-import { url } from '../../lib/links';
+import SpotifyButton from '../../components/SpotifyButton.astro';
+import { getPodcast, type Episode } from '../../lib/feed';
+import { episodeLabel, formatDate, formatDuration, formatTimestamp, sizedImage } from '../../lib/format';
+import { absoluteUrl, episodeUrl, url } from '../../lib/links';
 import { playData } from '../../lib/play';
 import { TAG_LABELS, type EpisodeTags } from '../../data/tags';
 
@@ -22,7 +24,6 @@ interface Props {
 }
 
 const { episode, newer, older } = Astro.props;
-const label = episode.number !== null ? `#${episode.number}` : TYPE_LABEL[episode.type];
 const tagGroups = (Object.keys(TAG_LABELS) as (keyof EpisodeTags)[])
   .filter((key) => episode.tags[key]?.length)
   .map((key) => ({ label: TAG_LABELS[key], values: episode.tags[key]! }));
@@ -35,10 +36,10 @@ const jsonLd = {
   datePublished: episode.date,
   description: episode.summary,
   image: episode.image,
-  url: new URL(url(`episode/${episode.slug}/`), Astro.site).href,
+  url: absoluteUrl(episodeUrl(episode)),
   timeRequired: `PT${Math.round(episode.duration / 60)}M`,
   associatedMedia: { '@type': 'MediaObject', contentUrl: episode.audioUrl },
-  partOfSeries: { '@type': 'PodcastSeries', name: 'Spæll', url: new URL(url(), Astro.site).href },
+  partOfSeries: { '@type': 'PodcastSeries', name: 'Spæll', url: absoluteUrl() },
 };
 ---
 
@@ -56,7 +57,7 @@ const jsonLd = {
       <nav class="step" aria-label="Bla i episoder">
         {
           older ? (
-            <a href={url(`episode/${older.slug}/`)} rel="prev" title={older.fullTitle} aria-label={`Forrige episode: ${older.fullTitle}`}>
+            <a href={episodeUrl(older)} rel="prev" title={older.fullTitle} aria-label={`Forrige episode: ${older.fullTitle}`}>
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
               Forrige<span class="long"> episode</span>
             </a>
@@ -69,7 +70,7 @@ const jsonLd = {
         }
         {
           newer ? (
-            <a href={url(`episode/${newer.slug}/`)} rel="next" title={newer.fullTitle} aria-label={`Neste episode: ${newer.fullTitle}`}>
+            <a href={episodeUrl(newer)} rel="next" title={newer.fullTitle} aria-label={`Neste episode: ${newer.fullTitle}`}>
               Neste<span class="long"> episode</span>
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
             </a>
@@ -87,10 +88,13 @@ const jsonLd = {
       <header>
         <Image src={sizedImage(episode.image, 'Medium')} alt="" width={360} height={360} widths={[208, 360, 600]} sizes="(max-width: 640px) 104px, 280px" loading="eager" fetchpriority="high" />
         <div>
-          <span class={`badge badge-${episode.type}`}>{label}</span>
+          <span class={`badge badge-${episode.type}`}>{episodeLabel(episode)}</span>
           <h1>{episode.title}</h1>
           <p class="meta"><time datetime={episode.date}>{formatDate(episode.date)}</time> · {formatDuration(episode.duration)}</p>
-          <PlayButton episode={episode} />
+          <div class="actions">
+            <PlayButton episode={episode} />
+            <SpotifyButton episode={episode} />
+          </div>
         </div>
       </header>
 
@@ -142,8 +146,8 @@ const jsonLd = {
     </div>
 
     <nav class="pager" aria-label="Flere episoder">
-      {older ? <a href={url(`episode/${older.slug}/`)} rel="prev"><span class="meta">← Forrige episode</span>{older.fullTitle}</a> : <span />}
-      {newer && <a class="newer" href={url(`episode/${newer.slug}/`)} rel="next"><span class="meta">Neste episode →</span>{newer.fullTitle}</a>}
+      {older ? <a href={episodeUrl(older)} rel="prev"><span class="meta">← Forrige episode</span>{older.fullTitle}</a> : <span />}
+      {newer && <a class="newer" href={episodeUrl(newer)} rel="next"><span class="meta">Neste episode →</span>{newer.fullTitle}</a>}
     </nav>
   </article>
 </Base>
@@ -166,6 +170,7 @@ const jsonLd = {
   header img { border-radius: var(--radius); aspect-ratio: 1; object-fit: cover; }
   h1 { margin: 10px 0 6px; font-size: clamp(1.8rem, 4vw, 2.75rem); line-height: 1.1; }
   header .meta { margin: 0 0 18px; }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
   /* Mobil: lite cover ved siden av tittelen, play-knappen i full bredde under. */
   @media (max-width: 640px) {
     .episode { padding-top: 16px; }
@@ -178,7 +183,8 @@ const jsonLd = {
     header .badge, h1, header .meta { grid-column: 2; justify-self: start; }
     h1 { margin: 6px 0 4px; font-size: 1.4rem; }
     header .meta { margin: 0; font-size: 0.8rem; }
-    header :global(.btn) { grid-column: 1 / -1; margin-top: 16px; justify-content: center; }
+    .actions { grid-column: 1 / -1; margin-top: 16px; }
+    .actions :global(.btn) { flex: 1; justify-content: center; }
     .prose { font-size: 1rem; }
   }
 
