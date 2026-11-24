@@ -145,11 +145,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   height: 100%; object-fit: cover; overflow: clip;
 }
 
-/* Avspilleren glir opp fra bunnen når den åpnes, og ned igjen når den lukkes. Siden står stille. */
-:active-view-transition-type(player-open)::view-transition-old(root),
-:active-view-transition-type(player-open)::view-transition-new(root),
-:active-view-transition-type(player-close)::view-transition-old(root),
-:active-view-transition-type(player-close)::view-transition-new(root) {
+/* Avspilleren glir opp fra bunnen når den åpnes, og ned igjen når den lukkes. Siden står stille,
+   også når avspilleren minimeres. */
+:active-view-transition-type(player, player-open, player-close)::view-transition-old(root),
+:active-view-transition-type(player, player-open, player-close)::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
 }
