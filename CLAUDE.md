@@ -60,7 +60,7 @@ All pages use `layouts/Base.astro`, which holds the header (with active-menu mar
   - `jump` / `jump-up` / `jump-down`: same-page anchor links, intercepted in a capture-phase click listener in `Base.astro`.
   - `player`: minimizing/expanding the player.
 
-**Player contract:** any element with `data-play` starts an episode. A document-level click listener in `Player.astro` handles the click. Produce the attributes with `playData(episode)` in `src/lib/play.ts` rather than writing them by hand. Add `data-start="<seconds>"` to jump to a timestamp (used for chapter links). The player stores state in `localStorage` under the `spaell:` prefix: `pos:<id>` for resume position, plus `speed`, `current` (last track, `null` after close), `minimized` and `theme`. Every storage access is wrapped in try/catch.
+**Player contract:** any element with `data-play` starts an episode. A document-level click listener in `Player.astro` handles the click. Produce the attributes with `playData(episode)` in `src/lib/play.ts` rather than writing them by hand. Add `data-start="<seconds>"` to jump to a timestamp (used for chapter links). The player stores state in `localStorage` under the `spaell:` prefix: `pos:<id>` for resume position, plus `speed`, `current` (last track, `null` after close), `minimized` and `theme`. All of it goes through `store` in `src/lib/storage.ts`, which adds the prefix and wraps every access in try/catch (`get`/`set` for JSON, `getText`/`setText` for plain text). The theme is plain text because the inline theme script in `Base.astro` reads it directly and keeps its own copy of the rule.
 
 Player layout:
 - **Full bar:** three areas (now / center / side).

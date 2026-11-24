@@ -48,7 +48,8 @@ const section = Astro.url.pathname.slice(import.meta.env.BASE_URL.replace(/\/$/,
     <meta name="theme-color" content="#0d0d0f" />
     <script is:inline>
       // Setter tema før siden tegnes, på nytt etter hvert sidebytte i ClientRouter, og når
-      // ThemeToggle sender «spaell:theme». Mørkt er standard.
+      // ThemeToggle sender «spaell:theme». Mørkt er standard. Må ligge inline, så det har sin
+      // egen kopi av lagringsregelen i lib/storage.ts.
       (() => {
         const stored = () => {
           try {
