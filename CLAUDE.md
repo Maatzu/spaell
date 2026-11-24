@@ -53,7 +53,7 @@ All pages use `layouts/Base.astro`, which holds the header (with active-menu mar
 
 **Client-side navigation:** Base uses Astro's `<ClientRouter />` (view transitions). Consequences:
 - Page scripts must initialize on `astro:page-load`, not on module load (see the filter script in `index.astro`).
-- The theme is applied again on `astro:after-swap`.
+- The theme is applied again on `astro:after-swap`. The swap removes every attribute on `<html>`, including inline `style`, so the player sets `--player-h`/`--player-space` again there too.
 - `Player.astro` is `transition:persist`, so audio keeps playing across navigation.
 - Manual view transitions use types that `global.css` keys animations off:
   - `filter`: filtering on the front page.
@@ -61,12 +61,12 @@ All pages use `layouts/Base.astro`, which holds the header (with active-menu mar
   - `jump` / `jump-up` / `jump-down`: same-page anchor links, intercepted in a capture-phase click listener in `Base.astro`.
   - `player`: minimizing/expanding the player.
 
-**Player contract:** any element with `data-play` starts an episode. A document-level click listener in `Player.astro` handles the click. `src/lib/play.ts` owns the whole contract: produce the attributes with `playData(episode, { start?, ariaLabel? })` rather than writing them by hand. `start` (seconds) jumps to a timestamp (chapter links); `ariaLabel` is for buttons without visible text. `markPlaying(el, active)` decides how a button shows it is playing (`is-playing`, the `[data-play-label]` text, the aria-label; buttons with a start point are never marked), so the player only calls it on every `[data-play]`. The player stores state in `localStorage` under the `spaell:` prefix: `pos:<id>` for resume position, plus `speed`, `current` (last track, `null` after close), `minimized` and `theme`. All of it goes through `store` in `src/lib/storage.ts`, which adds the prefix and wraps every access in try/catch (`get`/`set` for JSON, `getText`/`setText` for plain text). The theme is plain text because the inline theme script in `Base.astro` reads it directly and keeps its own copy of the rule.
+**Player contract:** any element with `data-play` starts an episode. A document-level click listener in `Player.astro` handles the click. `src/lib/play.ts` owns the whole contract: produce the attributes with `playData(episode, { start?, ariaLabel? })` rather than writing them by hand. `start` (seconds) jumps to a timestamp (chapter links); `ariaLabel` is for buttons without visible text. `markPlaying(el, active)` decides how a button shows it is playing (`is-playing`, the `[data-play-label]` text, the aria-label; buttons with a start point are never marked), so the player only calls it on every `[data-play]`. The player stores state in `localStorage` under the `spaell:` prefix: `pos:<id>` for resume position, plus `speed`, `volume`, `muted`, `current` (last track, `null` after close), `minimized` and `theme`. All of it goes through `store` in `src/lib/storage.ts`, which adds the prefix and wraps every access in try/catch (`get`/`set` for JSON, `getText`/`setText` for plain text). The theme is plain text because the inline theme script in `Base.astro` reads it directly and keeps its own copy of the rule.
 
 Player layout:
 - **Full bar:** three areas (now / center / side).
 - **Minimized:** the `.mini` cover icon. Both share `view-transition-name: player`, so only one may be visible at a time.
-- **Mobile (≤760px):** `.center`, `.controls` and `.side` become `display: contents`, and the buttons are placed on a five-column grid.
+- **Mobile (≤760px):** `.center`, `.controls` and `.side` become `display: contents`, and the buttons are placed on a five-column grid. The volume control is hidden (phones have hardware buttons, and iOS ignores `audio.volume`).
 - **`--player-h` / `--player-space`:** set by a `ResizeObserver` on `.bar` and `.mini`. `--player-h` is the bar's height (0 when minimized or closed). `--player-space` drives the page's bottom padding and `scroll-padding-bottom`: bar height + 24px, or the mini icon + 32px when minimized, 0 when closed.
 
 **Theming:** dark is the default. `data-theme="light"` on `<html>` switches palettes via CSS variables in `src/styles/global.css`. The player deliberately uses the opposite palette (`--player-*` vars, incl. `--player-scheme` for native controls), so it is silver in dark mode and dark in light mode. Check both themes when touching player styles.

@@ -50,6 +50,16 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
         </button>
         <ol class="chapter-list" id="player-chapters" data-chapter-list hidden></ol>
       </div>
+      <div class="volume" data-volume>
+        <button type="button" class="mute" data-mute aria-label="Slå av lyden">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path class="speaker" d="M11 5 6 9H2v6h4l5 4z" />
+            <path class="waves" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" />
+            <path class="cross" d="m16 9 6 6m0-6-6 6" />
+          </svg>
+        </button>
+        <input type="range" min="0" max="1" step="0.05" value="1" data-volume-range aria-label="Volum" />
+      </div>
       <button type="button" class="speed" data-speed aria-label="Avspillingshastighet">1×</button>
       <button type="button" class="minimize" data-minimize aria-label="Minimer avspilleren">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -93,6 +103,9 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   const expandBtn = root.querySelector<HTMLButtonElement>('[data-expand]')!;
   const closeBtn = root.querySelector<HTMLButtonElement>('[data-close]')!;
   const hoverTip = root.querySelector<HTMLElement>('[data-hover-tip]')!;
+  const volumeBox = root.querySelector<HTMLElement>('[data-volume]')!;
+  const muteBtn = root.querySelector<HTMLButtonElement>('[data-mute]')!;
+  const volumeRange = root.querySelector<HTMLInputElement>('[data-volume-range]')!;
   let track: Track | null = null;
   let lastSaved = 0;
   let activeChapter = -1;
@@ -212,14 +225,17 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
 
   // --player-h er høyden på hele avspilleren. --player-space er luften sidene får nederst, med litt
   // margin, så innholdet ikke havner rett under kanten. Minimert gir den plass til coverbildet i hjørnet.
-  const sizes = new ResizeObserver(() => {
+  function updateSpace() {
     const style = document.documentElement.style;
     style.setProperty('--player-h', `${bar.offsetHeight}px`);
     const space = bar.offsetHeight ? bar.offsetHeight + 24 : expandBtn.offsetHeight ? expandBtn.offsetHeight + 32 : 0;
     style.setProperty('--player-space', `${space}px`);
-  });
+  }
+  const sizes = new ResizeObserver(updateSpace);
   sizes.observe(bar);
   sizes.observe(expandBtn);
+  // ClientRouter fjerner alle attributter på <html> ved sidebytte, også style med variablene over.
+  document.addEventListener('astro:after-swap', updateSpace);
 
   function setMinimized(minimized: boolean, animate = true) {
     const update = () => {
@@ -286,6 +302,32 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     store.set('speed', next);
   });
   range.addEventListener('input', () => (audio.currentTime = Number(range.value)));
+
+  // Volumet huskes mellom besøk. Dempet vises som volum 0, men det forrige volumet beholdes til lyden slås på igjen.
+  function syncVolume() {
+    const silent = audio.muted || audio.volume === 0;
+    volumeBox.classList.toggle('is-muted', silent);
+    volumeRange.value = String(silent ? 0 : audio.volume);
+    muteBtn.setAttribute('aria-label', silent ? 'Slå på lyden' : 'Slå av lyden');
+  }
+  volumeRange.addEventListener('input', () => {
+    const volume = Number(volumeRange.value);
+    audio.muted = volume === 0;
+    if (volume > 0) audio.volume = volume;
+    syncVolume();
+  });
+  muteBtn.addEventListener('click', () => {
+    if (audio.volume === 0) audio.volume = 1;
+    audio.muted = !audio.muted;
+  });
+  audio.addEventListener('volumechange', () => {
+    store.set('volume', audio.volume);
+    store.set('muted', audio.muted);
+    syncVolume();
+  });
+  audio.volume = Math.min(1, Math.max(0, Number(store.get<number>('volume') ?? 1) || 0));
+  audio.muted = store.get<boolean>('muted') ?? false;
+  syncVolume();
 
   minimizeBtn.addEventListener('click', () => setMinimized(true));
   expandBtn.addEventListener('click', () => setMinimized(false));
@@ -413,8 +455,15 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   .bar .toggle { background: var(--red); color: var(--accent-ink); display: grid; place-items: center; width: 40px; height: 40px; }
   .bar .toggle:hover { background: var(--red-hover); color: var(--accent-ink); }
 
-  /* Høyre: kapitler, hastighet og minimer. */
+  /* Høyre: kapitler, volum, hastighet og minimer. */
   .side { grid-area: side; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+  .volume { display: flex; align-items: center; }
+  .mute { display: grid; place-items: center; }
+  .mute svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mute .speaker { fill: currentColor; }
+  .mute .cross, .is-muted .mute .waves { display: none; }
+  .is-muted .mute .cross { display: inline; }
+  .volume input { width: 84px; margin: 0 6px 0 0; accent-color: var(--red); }
   .speed { width: 3.8em; font-variant-numeric: tabular-nums; }
   .minimize, .close { display: grid; place-items: center; }
   .minimize svg, .close svg { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
@@ -476,7 +525,8 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     }
     .center, .controls, .side { display: contents; }
     .bar > * , .controls > *, .side > * { justify-self: center; }
-    .now { grid-column: 1 / 4; grid-row: 1; justify-self: stretch; }
+    /* .bar > .now, så den slår .bar > * over; ellers sentreres den og lange titler flyter over minimer. */
+    .bar > .now { grid-column: 1 / 4; grid-row: 1; justify-self: stretch; }
     .minimize { grid-column: 4; grid-row: 1; }
     .close { grid-column: 5; grid-row: 1; }
     .chapters-menu { grid-column: 1; grid-row: 2; }
@@ -484,6 +534,8 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     .toggle { grid-column: 3; grid-row: 2; }
     [data-skip='30'] { grid-column: 4; grid-row: 2; }
     .speed { grid-column: 5; grid-row: 2; }
+    /* Telefoner har egne volumknapper, og iOS lar ikke siden styre volumet. */
+    .volume { display: none; }
     .scrub { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; }
     .bar button { min-width: 40px; min-height: 40px; }
     .cover img { width: 40px; height: 40px; }
