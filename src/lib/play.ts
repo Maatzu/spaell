@@ -13,8 +13,20 @@ export interface Track {
   chapters: Chapter[];
 }
 
-/** data-attributtene avspilleren leser når noe med data-play klikkes. */
-export function playData(episode: Episode) {
+interface PlayOptions {
+  /** Start på dette tidspunktet (sekunder), f.eks. for kapittellenker. Slike knapper merkes aldri som spillende. */
+  start?: number;
+  /** Knappen har ingen synlig tekst, så aria-label sier «Spill av»/«Pause» og tittelen. */
+  ariaLabel?: boolean;
+}
+
+const label = (active: boolean) => (active ? 'Pause' : 'Spill av');
+
+/**
+ * data-attributtene avspilleren leser når noe med data-play klikkes.
+ * Knapper med synlig tekst legger den i et element med data-play-label.
+ */
+export function playData(episode: Episode, { start, ariaLabel = false }: PlayOptions = {}) {
   return {
     'data-play': episode.id,
     'data-src': episode.audioUrl,
@@ -23,6 +35,8 @@ export function playData(episode: Episode) {
     'data-href': episodeUrl(episode),
     'data-duration': episode.duration,
     'data-chapters': episode.chapters.length ? JSON.stringify(episode.chapters) : undefined,
+    'data-start': start,
+    'aria-label': ariaLabel ? `${label(false)} ${episode.fullTitle}` : undefined,
   };
 }
 
@@ -37,4 +51,18 @@ export function readTrack(d: DOMStringMap): Track {
     duration: Number(d.duration) || 0,
     chapters: d.chapters ? JSON.parse(d.chapters) : [],
   };
+}
+
+/** Startpunktet i sekunder, eller undefined hvis knappen bare spiller av episoden. */
+export function readStart(d: DOMStringMap): number | undefined {
+  return d.start !== undefined ? Number(d.start) : undefined;
+}
+
+/** Viser om knappen spiller av nå. Knapper med startpunkt (kapitler) merkes ikke. */
+export function markPlaying(el: HTMLElement, active: boolean) {
+  if (readStart(el.dataset) !== undefined) return;
+  el.classList.toggle('is-playing', active);
+  const text = el.querySelector('[data-play-label]');
+  if (text) text.textContent = label(active);
+  if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', `${label(active)} ${el.dataset.title}`);
 }
