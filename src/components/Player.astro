@@ -7,6 +7,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
  *   data-play="<id>" data-src data-title data-image data-href data-duration [data-chapters=JSON] [data-start=sekunder]
  * Attributtene lages av playData() og leses av readTrack()/readStart() i src/lib/play.ts,
  * og markPlaying() der bestemmer hvordan hver knapp viser at den spiller.
+ * Kapitler, volum og plassen avspilleren tar nederst på siden ligger i src/lib/player/.
  */
 ---
 
@@ -50,6 +51,16 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
         </button>
         <ol class="chapter-list" id="player-chapters" data-chapter-list hidden></ol>
       </div>
+      <div class="volume" data-volume>
+        <button type="button" class="mute" data-mute aria-label="Slå av lyden">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path class="speaker" d="M11 5 6 9H2v6h4l5 4z" />
+            <path class="waves" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" />
+            <path class="cross" d="m16 9 6 6m0-6-6 6" />
+          </svg>
+        </button>
+        <input type="range" min="0" max="1" step="0.05" value="1" data-volume-range aria-label="Volum" />
+      </div>
       <button type="button" class="speed" data-speed aria-label="Avspillingshastighet">1×</button>
       <button type="button" class="minimize" data-minimize aria-label="Minimer avspilleren">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -68,9 +79,12 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
 </div>
 
 <script>
-  import type { Chapter } from '../lib/feed';
   import { formatTimestamp } from '../lib/format';
   import { markPlaying, readStart, readTrack, type Track } from '../lib/play';
+  import { setupChapters } from '../lib/player/chapters';
+  import { olderTrack } from '../lib/player/queue';
+  import { trackPlayerSpace } from '../lib/player/space';
+  import { setupVolume } from '../lib/player/volume';
   import { store } from '../lib/storage';
   import { withViewTransition } from '../lib/transition';
 
@@ -78,113 +92,24 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
 
   const root = document.getElementById('player')!;
   const audio = root.querySelector('audio')!;
-  const range = root.querySelector<HTMLInputElement>('input[type=range]')!;
+  const range = root.querySelector<HTMLInputElement>('.scrub input[type=range]')!;
   const current = root.querySelector<HTMLElement>('[data-current]')!;
   const total = root.querySelector<HTMLElement>('[data-duration]')!;
   const toggle = root.querySelector<HTMLButtonElement>('[data-toggle]')!;
   const speedBtn = root.querySelector<HTMLButtonElement>('[data-speed]')!;
-  const chapterLabel = root.querySelector<HTMLElement>('[data-chapter]')!;
-  const markers = root.querySelector<HTMLElement>('[data-markers]')!;
-  const chaptersToggle = root.querySelector<HTMLButtonElement>('[data-chapters-toggle]')!;
-  const chapterList = root.querySelector<HTMLOListElement>('[data-chapter-list]')!;
-  const trackEl = root.querySelector<HTMLElement>('.track')!;
   const bar = root.querySelector<HTMLElement>('[data-bar]')!;
   const minimizeBtn = root.querySelector<HTMLButtonElement>('[data-minimize]')!;
   const expandBtn = root.querySelector<HTMLButtonElement>('[data-expand]')!;
   const closeBtn = root.querySelector<HTMLButtonElement>('[data-close]')!;
-  const hoverTip = root.querySelector<HTMLElement>('[data-hover-tip]')!;
   let track: Track | null = null;
   let lastSaved = 0;
-  let activeChapter = -1;
 
-  /** Indeksen til kapittelet som spilles på tidspunktet, eller -1 før det første. */
-  function chapterAt(chapters: Chapter[], time: number): number {
-    let index = -1;
-    for (let i = 0; i < chapters.length; i++) if (chapters[i].start <= time) index = i;
-    return index;
-  }
-
-  /** Varigheten fra lydfila når den er lastet, ellers fra feeden. */
-  function knownDuration(): number {
-    return audio.duration || track?.duration || 0;
-  }
+  const chapters = setupChapters(root, audio);
+  setupVolume(root, audio);
+  trackPlayerSpace(bar, expandBtn);
 
   function savePosition() {
     if (track) store.set(`pos:${track.id}`, Math.floor(audio.currentTime));
-  }
-
-  function renderChapters() {
-    const chapters = track?.chapters ?? [];
-    chaptersToggle.hidden = chapters.length === 0;
-    setChapterListOpen(false);
-    chapterList.replaceChildren(
-      ...chapters.map((c, i) => {
-        const li = document.createElement('li');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.index = String(i);
-        const ts = document.createElement('span');
-        ts.className = 'ts';
-        ts.textContent = formatTimestamp(c.start);
-        btn.append(ts, c.title);
-        li.append(btn);
-        return li;
-      }),
-    );
-    renderMarkers();
-    activeChapter = -1;
-    updateChapter();
-  }
-
-  function renderMarkers() {
-    const chapters = track?.chapters ?? [];
-    const duration = knownDuration();
-    markers.replaceChildren(
-      ...(duration > 0 ? chapters.slice(1) : []).map((c) => {
-        const tick = document.createElement('span');
-        tick.style.left = `${(c.start / duration) * 100}%`;
-        return tick;
-      }),
-    );
-  }
-
-  // Viser kapittelet (og tidspunktet) under musepekeren når man holder over tidslinja.
-  function showHoverTip(e: PointerEvent) {
-    const chapters = track?.chapters ?? [];
-    const duration = knownDuration();
-    if (e.pointerType === 'touch' || chapters.length === 0 || duration <= 0) return hideHoverTip();
-    // Samme innrykk som markørene, så posisjonen stemmer med tommelen på slideren.
-    const box = markers.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
-    const time = ratio * duration;
-    const index = Math.max(0, chapterAt(chapters, time));
-    hoverTip.textContent = `${formatTimestamp(time)} · ${chapters[index].title}`;
-    hoverTip.hidden = false;
-    // Hold boblen innenfor tidslinja i begge ender.
-    const half = hoverTip.offsetWidth / 2;
-    const trackBox = trackEl.getBoundingClientRect();
-    const x = Math.min(trackBox.width - half, Math.max(half, e.clientX - trackBox.left));
-    hoverTip.style.left = `${x}px`;
-  }
-
-  function hideHoverTip() {
-    hoverTip.hidden = true;
-  }
-
-  function updateChapter(time = audio.currentTime) {
-    const chapters = track?.chapters ?? [];
-    const index = chapterAt(chapters, time);
-    if (index === activeChapter) return;
-    activeChapter = index;
-    // Første kapittel heter ofte det samme som episoden; da viser vi det ikke to ganger.
-    const title = index >= 0 ? chapters[index].title : '';
-    chapterLabel.textContent = title === track?.title ? '' : title;
-    chapterList.querySelectorAll('button').forEach((b, i) => b.classList.toggle('is-active', i === index));
-  }
-
-  function setChapterListOpen(open: boolean) {
-    chapterList.hidden = !open;
-    chaptersToggle.setAttribute('aria-expanded', String(open));
   }
 
   function load(next: Track, start?: number) {
@@ -198,34 +123,22 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
       root.querySelector('.title')!.textContent = next.title;
       range.max = String(next.duration);
       total.textContent = formatTimestamp(next.duration);
-      renderChapters();
+      chapters.show(next);
       root.hidden = false;
       const resumeAt = start ?? store.get<number>(`pos:${next.id}`) ?? 0;
       range.value = String(resumeAt);
       current.textContent = formatTimestamp(resumeAt);
-      updateChapter(resumeAt);
+      chapters.update(resumeAt);
       audio.addEventListener('loadedmetadata', () => (audio.currentTime = resumeAt), { once: true });
     } else if (start !== undefined) {
       audio.currentTime = start;
     }
   }
 
-  // --player-h er høyden på hele avspilleren. --player-space er luften sidene får nederst, med litt
-  // margin, så innholdet ikke havner rett under kanten. Minimert gir den plass til coverbildet i hjørnet.
-  const sizes = new ResizeObserver(() => {
-    const style = document.documentElement.style;
-    style.setProperty('--player-h', `${bar.offsetHeight}px`);
-    const space = bar.offsetHeight ? bar.offsetHeight + 24 : expandBtn.offsetHeight ? expandBtn.offsetHeight + 32 : 0;
-    style.setProperty('--player-space', `${space}px`);
-  });
-  sizes.observe(bar);
-  sizes.observe(expandBtn);
-
   function setMinimized(minimized: boolean, animate = true) {
     const update = () => {
       root.classList.toggle('is-minimized', minimized);
-      setChapterListOpen(false);
-      hideHoverTip();
+      chapters.close();
     };
     store.set('minimized', minimized);
     if (!animate) return update();
@@ -243,8 +156,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     audio.removeAttribute('src');
     audio.load();
     store.set('current', null);
-    setChapterListOpen(false);
-    hideHoverTip();
+    chapters.close();
     root.hidden = true;
     root.classList.remove('is-minimized');
     store.set('minimized', false);
@@ -286,29 +198,9 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     store.set('speed', next);
   });
   range.addEventListener('input', () => (audio.currentTime = Number(range.value)));
-
   minimizeBtn.addEventListener('click', () => setMinimized(true));
   expandBtn.addEventListener('click', () => setMinimized(false));
   closeBtn.addEventListener('click', close);
-  trackEl.addEventListener('pointermove', showHoverTip);
-  trackEl.addEventListener('pointerleave', hideHoverTip);
-  chaptersToggle.addEventListener('click', () => setChapterListOpen(chapterList.hidden));
-  chapterList.addEventListener('click', (e) => {
-    const btn = (e.target as Element).closest<HTMLButtonElement>('button[data-index]');
-    if (!btn || !track) return;
-    audio.currentTime = track.chapters[Number(btn.dataset.index)].start;
-    audio.play();
-    setChapterListOpen(false);
-  });
-  document.addEventListener('click', (e) => {
-    if (!chapterList.hidden && !(e.target as Element).closest('.chapters-menu')) setChapterListOpen(false);
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !chapterList.hidden) {
-      setChapterListOpen(false);
-      chaptersToggle.focus();
-    }
-  });
 
   audio.addEventListener('play', () => {
     audio.playbackRate = store.get<number>('speed') ?? 1;
@@ -322,18 +214,26 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   audio.addEventListener('loadedmetadata', () => {
     range.max = String(Math.floor(audio.duration));
     total.textContent = formatTimestamp(audio.duration);
-    renderMarkers();
   });
   audio.addEventListener('timeupdate', () => {
     range.value = String(Math.floor(audio.currentTime));
     current.textContent = formatTimestamp(audio.currentTime);
-    updateChapter();
+    chapters.update();
     if (Math.abs(audio.currentTime - lastSaved) > 5) {
       lastSaved = audio.currentTime;
       savePosition();
     }
   });
-  audio.addEventListener('ended', () => store.set(`pos:${track?.id}`, 0));
+  // Når en episode er ferdig, spilles den forrige (eldre) av, med mindre noe annet er startet i mellomtiden.
+  audio.addEventListener('ended', async () => {
+    if (!track) return;
+    const finished = track.id;
+    store.set(`pos:${finished}`, 0);
+    const next = await olderTrack(finished);
+    if (!next || track?.id !== finished || !audio.ended) return;
+    load(next);
+    audio.play();
+  });
   window.addEventListener('pagehide', savePosition);
   document.addEventListener('astro:page-load', syncButtons);
 
@@ -413,8 +313,15 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   .bar .toggle { background: var(--red); color: var(--accent-ink); display: grid; place-items: center; width: 40px; height: 40px; }
   .bar .toggle:hover { background: var(--red-hover); color: var(--accent-ink); }
 
-  /* Høyre: kapitler, hastighet og minimer. */
+  /* Høyre: kapitler, volum, hastighet og minimer. */
   .side { grid-area: side; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+  .volume { display: flex; align-items: center; }
+  .mute { display: grid; place-items: center; }
+  .mute svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mute .speaker { fill: currentColor; }
+  .mute .cross, .is-muted .mute .waves { display: none; }
+  .is-muted .mute .cross { display: inline; }
+  .volume input { width: 84px; margin: 0 6px 0 0; accent-color: var(--red); }
   .speed { width: 3.8em; font-variant-numeric: tabular-nums; }
   .minimize, .close { display: grid; place-items: center; }
   .minimize svg, .close svg { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
@@ -476,7 +383,8 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     }
     .center, .controls, .side { display: contents; }
     .bar > * , .controls > *, .side > * { justify-self: center; }
-    .now { grid-column: 1 / 4; grid-row: 1; justify-self: stretch; }
+    /* .bar > .now, så den slår .bar > * over; ellers sentreres den og lange titler flyter over minimer. */
+    .bar > .now { grid-column: 1 / 4; grid-row: 1; justify-self: stretch; }
     .minimize { grid-column: 4; grid-row: 1; }
     .close { grid-column: 5; grid-row: 1; }
     .chapters-menu { grid-column: 1; grid-row: 2; }
@@ -484,6 +392,8 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     .toggle { grid-column: 3; grid-row: 2; }
     [data-skip='30'] { grid-column: 4; grid-row: 2; }
     .speed { grid-column: 5; grid-row: 2; }
+    /* Telefoner har egne volumknapper, og iOS lar ikke siden styre volumet. */
+    .volume { display: none; }
     .scrub { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; }
     .bar button { min-width: 40px; min-height: 40px; }
     .cover img { width: 40px; height: 40px; }
