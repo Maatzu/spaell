@@ -31,7 +31,14 @@ The user usually has `astro dev` running already (often on port 4322). Starting 
 
 **Spotify:** `src/lib/spotify.ts` fetches the show's episodes from the Spotify Web API (client credentials from `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET`, GitHub secrets in CI, `.env` locally) and `getPodcast()` sets `episode.spotifyUrl`, matched on title, else on release date. Without keys, or if Spotify fails, every episode links to the show page and the build continues. `SpotifyButton.astro` («Spill av i Spotify», shortened to «Spotify» at ≤760px) sits next to `PlayButton` on the front-page hero and the episode page.
 
-**Tags:** `src/data/tags.ts` holds hand-written tags (plattform, studio, produsent, sjanger, serie, tema) keyed by episode slug. `feed.ts` attaches them as `episode.tags`. They are added to the search text in `EpisodeCard.astro` and shown on the episode page, where each tag links to `?q=<tag>#episoder`. The filter script on the front page reads `?q`. New episodes get no tags automatically; add them to the file by hand. If an episode title changes in the feed, its slug changes and its tags stop matching.
+**Tags:** `src/data/tags.ts` holds hand-written tags (plattform, studio, produsent, sjanger, serie, tema) keyed by episode slug. `feed.ts` attaches them as `episode.tags`. They are added to the search text and shown on the episode page, where each tag links to the filtered front page. New episodes get no tags automatically; add them to the file by hand. If an episode title changes in the feed, its slug changes and its tags stop matching.
+
+**Search:** `src/lib/search.ts` owns the front-page search:
+- `searchData(episode)` gives each card its `data-search`/`data-year`/`data-type` attributes (search text is title, description and tags, lowercased). `readEntry()` reads them back.
+- `matcher(filter)` decides whether a card matches the query, year span and type. It is pure, so it runs without the DOM.
+- `tagSearchUrl(tag)` builds the `?q=<tag>#episoder` links on the episode page, and `queryFromUrl()` reads `?q` back on the front page.
+
+The filter script in `index.astro` only updates the page (hide/sort cards, counts, view transitions). Change what matches in `search.ts`, not there.
 
 **Deployment:** `.github/workflows/deploy.yml` builds and publishes to GitHub Pages on push to `main`, nightly, and hourly on Tuesdays (new episodes usually land then), so the site picks up new episodes without code changes. The site lives under `base: '/spaell'` in production, but `astro.config.mjs` sets base to `/` when running `astro dev`. Always build internal links with `url()` from `src/lib/links.ts`, never hardcoded `/` paths.
 

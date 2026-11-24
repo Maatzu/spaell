@@ -5,6 +5,7 @@ import type { Episode } from '../lib/feed';
 import { episodeLabel, formatDate, formatDuration, sizedImage } from '../lib/format';
 import { episodeUrl } from '../lib/links';
 import { playData } from '../lib/play';
+import { searchData } from '../lib/search';
 
 interface Props {
   episode: Episode;
@@ -13,12 +14,11 @@ interface Props {
 }
 
 const { episode, eager = false } = Astro.props;
-const search = `${episode.fullTitle} ${episode.text} ${Object.values(episode.tags).flat().join(' ')}`.toLowerCase();
 // Nummererte episoder får en nøytral badge; de andre farges etter type.
 const badgeClass = episode.number !== null ? 'badge' : `badge badge-${episode.type}`;
 ---
 
-<li class="card" data-search={search} data-year={episode.year} data-type={episode.type}>
+<li class="card" {...searchData(episode)}>
   <button
     type="button"
     class="cover"

@@ -116,6 +116,7 @@ const jsonLd = {
 </Base>
 
 <script>
+  import { matcher, queryFromUrl, readEntry, type Filter } from '../lib/search';
   import { withViewTransition } from '../lib/transition';
 
   /** Gir kortene i synsfeltet et view-transition-navn, slik at de glir til ny plass. */
@@ -183,14 +184,15 @@ const jsonLd = {
     const filterCount = document.querySelector<HTMLElement>('[data-filter-count]')!;
     const reset = document.querySelector<HTMLButtonElement>('[data-reset]')!;
     const cards = [...grid.querySelectorAll<HTMLElement>('.card')];
+    const entries = cards.map((card) => readEntry(card.dataset));
 
     function yearSpan() {
       const [a, b] = yearInputs.map((input) => Number(input.value));
-      return [Math.min(a, b), Math.max(a, b)];
+      return { from: Math.min(a, b), to: Math.max(a, b) };
     }
 
     function updateYears() {
-      const [from, to] = yearSpan();
+      const { from, to } = yearSpan();
       const pct = (y: number) => `${((y - minYear) / (maxYear - minYear || 1)) * 100}%`;
       range.style.setProperty('--from', pct(from));
       range.style.setProperty('--to', pct(to));
@@ -198,25 +200,20 @@ const jsonLd = {
     }
 
     function apply() {
-      const [from, to] = yearSpan();
-      const terms = q.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      const years = yearSpan();
+      const show = matcher({ query: q.value, ...years, type: type.value as Filter['type'] });
       let visible = 0;
-      for (const card of cards) {
-        const d = card.dataset;
-        const show =
-          terms.every((t) => d.search!.includes(t)) &&
-          Number(d.year) >= from && Number(d.year) <= to &&
-          (!type.value || d.type === type.value);
-        card.hidden = !show;
-        if (show) visible++;
-      }
+      cards.forEach((card, i) => {
+        card.hidden = !show(entries[i]);
+        if (!card.hidden) visible++;
+      });
       const ordered = sort.value === 'old' ? [...cards].reverse() : cards;
       if (grid!.firstElementChild !== ordered[0]) grid!.append(...ordered);
       count.textContent = `(${visible})`;
       status.textContent = visible === cards.length ? '' : `${visible} episoder passer søket`;
       empty.hidden = visible > 0;
 
-      const active = [from > minYear || to < maxYear, type.value, sort.value !== 'new'].filter(Boolean).length;
+      const active = [years.from > minYear || years.to < maxYear, type.value, sort.value !== 'new'].filter(Boolean).length;
       filterCount.textContent = String(active);
       filterCount.hidden = active === 0;
       reset.hidden = active === 0 && !q.value;
@@ -252,7 +249,7 @@ const jsonLd = {
       animate(cards, apply);
     });
     // Tag-lenker fra episodesidene kommer hit med ?q=<tag>.
-    const initial = new URLSearchParams(location.search).get('q');
+    const initial = queryFromUrl(location.search);
     if (initial) q.value = initial;
     updateYears();
     apply();

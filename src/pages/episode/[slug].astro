@@ -7,6 +7,7 @@ import { getPodcast, type Episode } from '../../lib/feed';
 import { episodeLabel, formatDate, formatDuration, formatTimestamp, sizedImage } from '../../lib/format';
 import { absoluteUrl, episodeUrl, url } from '../../lib/links';
 import { playData } from '../../lib/play';
+import { tagSearchUrl } from '../../lib/search';
 import { TAG_LABELS, type EpisodeTags } from '../../data/tags';
 
 export async function getStaticPaths() {
@@ -111,7 +112,7 @@ const jsonLd = {
                   <dt>{group.label}</dt>
                   <dd>
                     {group.values.map((value) => (
-                      <a href={url(`?q=${encodeURIComponent(value)}#episoder`)} title={`Søk etter «${value}»`}>{value}</a>
+                      <a href={tagSearchUrl(value)} title={`Søk etter «${value}»`}>{value}</a>
                     ))}
                   </dd>
                 </div>
