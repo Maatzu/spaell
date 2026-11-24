@@ -12,7 +12,9 @@ import LinkIcon from '../components/LinkIcon.astro';
 const podcast = await getPodcast();
 const [latest] = podcast.episodes;
 const latestUrl = episodeUrl(latest);
-const years = [...new Set(podcast.episodes.map((e) => e.year))];
+const years = podcast.episodes.map((e) => e.year);
+const minYear = Math.min(...years);
+const maxYear = Math.max(...years);
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -82,11 +84,14 @@ const jsonLd = {
         Filter <span class="filter-count" data-filter-count hidden></span>
       </button>
       <div class="selects" id="filter-panel">
-        <label class="visually-hidden" for="year">År</label>
-        <select id="year">
-          <option value="">Alle år</option>
-          {years.map((y) => <option value={y}>{y}</option>)}
-        </select>
+        <!-- To håndtak som kan krysse hverandre; intervallet er alltid det minste til det største. -->
+        <div class="years" role="group" aria-label="År">
+          <span class="years-label" data-years-label>{minYear}–{maxYear}</span>
+          <div class="range" data-range>
+            <input type="range" min={minYear} max={maxYear} value={minYear} aria-label="Fra år" />
+            <input type="range" min={minYear} max={maxYear} value={maxYear} aria-label="Til år" />
+          </div>
+        </div>
         <label class="visually-hidden" for="type">Type</label>
         <select id="type">
           <option value="">Alle typer</option>
@@ -163,7 +168,11 @@ const jsonLd = {
       const room = q.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       q.placeholder = placeholders.find((p) => measure.measureText(p).width <= room) ?? placeholders.at(-1)!;
     }).observe(q);
-    const year = document.querySelector<HTMLSelectElement>('#year')!;
+    const range = document.querySelector<HTMLElement>('[data-range]')!;
+    const yearInputs = [...range.querySelectorAll<HTMLInputElement>('input')];
+    const yearsLabel = document.querySelector<HTMLElement>('[data-years-label]')!;
+    const minYear = Number(yearInputs[0].min);
+    const maxYear = Number(yearInputs[0].max);
     const type = document.querySelector<HTMLSelectElement>('#type')!;
     const sort = document.querySelector<HTMLSelectElement>('#sort')!;
     const count = document.querySelector<HTMLElement>('[data-count]')!;
@@ -175,14 +184,28 @@ const jsonLd = {
     const reset = document.querySelector<HTMLButtonElement>('[data-reset]')!;
     const cards = [...grid.querySelectorAll<HTMLElement>('.card')];
 
+    function yearSpan() {
+      const [a, b] = yearInputs.map((input) => Number(input.value));
+      return [Math.min(a, b), Math.max(a, b)];
+    }
+
+    function updateYears() {
+      const [from, to] = yearSpan();
+      const pct = (y: number) => `${((y - minYear) / (maxYear - minYear || 1)) * 100}%`;
+      range.style.setProperty('--from', pct(from));
+      range.style.setProperty('--to', pct(to));
+      yearsLabel.textContent = from === to ? String(from) : `${from}–${to}`;
+    }
+
     function apply() {
+      const [from, to] = yearSpan();
       const terms = q.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
       let visible = 0;
       for (const card of cards) {
         const d = card.dataset;
         const show =
           terms.every((t) => d.search!.includes(t)) &&
-          (!year.value || d.year === year.value) &&
+          Number(d.year) >= from && Number(d.year) <= to &&
           (!type.value || d.type === type.value);
         card.hidden = !show;
         if (show) visible++;
@@ -193,7 +216,7 @@ const jsonLd = {
       status.textContent = visible === cards.length ? '' : `${visible} episoder passer søket`;
       empty.hidden = visible > 0;
 
-      const active = [year.value, type.value, sort.value !== 'new'].filter(Boolean).length;
+      const active = [from > minYear || to < maxYear, type.value, sort.value !== 'new'].filter(Boolean).length;
       filterCount.textContent = String(active);
       filterCount.hidden = active === 0;
       reset.hidden = active === 0 && !q.value;
@@ -205,20 +228,33 @@ const jsonLd = {
       clearTimeout(typing);
       typing = setTimeout(() => animate(cards, apply), 180);
     });
-    [year, type, sort].forEach((el) => el.addEventListener('input', () => animate(cards, apply)));
+    // Etiketten følger håndtaket med en gang; kortene filtreres når håndtaket har stått i ro litt.
+    let sliding: ReturnType<typeof setTimeout>;
+    yearInputs.forEach((input) =>
+      input.addEventListener('input', () => {
+        updateYears();
+        clearTimeout(sliding);
+        sliding = setTimeout(() => animate(cards, apply), 120);
+      }),
+    );
+    [type, sort].forEach((el) => el.addEventListener('input', () => animate(cards, apply)));
     toggle.addEventListener('click', () => {
       const open = toggle.getAttribute('aria-expanded') !== 'true';
       toggle.setAttribute('aria-expanded', String(open));
       panel.classList.toggle('is-open', open);
     });
     reset.addEventListener('click', () => {
-      q.value = year.value = type.value = '';
+      q.value = type.value = '';
       sort.value = 'new';
+      yearInputs[0].value = String(minYear);
+      yearInputs[1].value = String(maxYear);
+      updateYears();
       animate(cards, apply);
     });
     // Tag-lenker fra episodesidene kommer hit med ?q=<tag>.
     const initial = new URLSearchParams(location.search).get('q');
     if (initial) q.value = initial;
+    updateYears();
     apply();
   }
 
@@ -282,7 +318,7 @@ const jsonLd = {
   }
   .search { position: relative; flex: 1; min-width: 0; }
   .search svg { position: absolute; left: 14px; top: 50%; translate: 0 -50%; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
-  .filters input, .filters select, .filters button {
+  .filters input[type='search'], .filters select, .filters button {
     font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid transparent;
     border-radius: 999px; padding: 0 14px; height: 40px;
   }
@@ -293,16 +329,52 @@ const jsonLd = {
     background-repeat: no-repeat; background-position: right 12px center; background-size: 14px;
   }
   .filters select:hover, .filters button:hover { background-color: var(--border); }
-  .filters input { width: 100%; padding-left: 40px; }
-  .filters input:focus, .filters select:focus { border-color: var(--red); outline: none; }
+  .filters input[type='search'] { width: 100%; padding-left: 40px; }
+  .filters input[type='search']:focus, .filters select:focus { border-color: var(--red); outline: none; }
   .selects { display: flex; gap: 6px; }
+
+  .years {
+    --thumb: 16px;
+    display: flex; align-items: center; gap: 12px; width: 17em; height: 40px; padding: 0 16px;
+    background: var(--surface-2); border: 1px solid transparent; border-radius: 999px;
+  }
+  .years:hover { background: var(--border); }
+  .years:focus-within { border-color: var(--red); }
+  /* Fast bredde, så slideren ikke flytter seg når teksten endres. */
+  .years-label { width: 5.6em; flex-shrink: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .range { position: relative; flex: 1; height: 24px; --from: 0%; --to: 100%; }
+  /* Sporet står innenfor halve håndtaket på hver side, så det treffer midten av håndtakene. */
+  .range::before {
+    content: ''; position: absolute; top: 50%; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2);
+    height: 4px; translate: 0 -50%; border-radius: 2px;
+    background: linear-gradient(to right,
+      var(--muted) var(--from), var(--red) var(--from), var(--red) var(--to), var(--muted) var(--to));
+    opacity: 0.9;
+  }
+  .range input {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+    appearance: none; background: none; pointer-events: none; outline: none;
+  }
+  .range input::-webkit-slider-runnable-track { background: none; }
+  .range input::-moz-range-track { background: none; }
+  .range input::-webkit-slider-thumb {
+    appearance: none; pointer-events: auto; cursor: grab;
+    width: var(--thumb); height: var(--thumb); border-radius: 50%;
+    background: #fff; border: 3px solid var(--red); box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  }
+  .range input::-moz-range-thumb {
+    pointer-events: auto; cursor: grab; box-sizing: border-box;
+    width: var(--thumb); height: var(--thumb); border-radius: 50%;
+    background: #fff; border: 3px solid var(--red); box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  }
+  .range input:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .range input:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* Egen nedtrekksliste der nettleseren støtter det (appearance: base-select); ellers brukes den vanlige. */
   @supports (appearance: base-select) {
     .filters select, .filters select::picker(select) { appearance: base-select; }
     .filters select { display: flex; align-items: center; }
     /* Fast bredde etter lengste valg, så knappene ikke endrer størrelse når valget endres. */
-    #year { width: 7.5em; }
     #type { width: 9.5em; }
     #sort { width: 10em; }
     .filters select::picker-icon { display: none; }
@@ -326,7 +398,6 @@ const jsonLd = {
     .filters option:hover, .filters option:focus-visible { background: var(--surface-2); outline: none; }
     .filters option:checked { color: var(--accent); font-weight: 650; }
     .filters option::checkmark { order: 1; margin-left: auto; color: var(--accent); }
-    .filters #year::picker(select) { max-height: 320px; overflow-y: auto; }
   }
   .reset {
     display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
@@ -351,9 +422,9 @@ const jsonLd = {
     .filter-toggle[aria-expanded='true'] { border-color: var(--red); }
     .selects { display: none; width: 100%; flex-wrap: wrap; }
     .selects.is-open { display: grid; grid-template-columns: 1fr 1fr; }
-    .selects select, #year, #type, #sort { width: 100%; }
-    .selects select:last-of-type { grid-column: 1 / -1; }
-    .filters input { font-size: 16px; } /* hindrer zoom på iOS */
+    .selects select, #type, #sort { width: 100%; }
+    .years { --thumb: 22px; grid-column: 1 / -1; width: auto; height: 48px; }
+    .filters input[type='search'] { font-size: 16px; } /* hindrer zoom på iOS */
   }
 
   .grid {

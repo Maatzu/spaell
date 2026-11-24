@@ -36,7 +36,7 @@ The user usually has `astro dev` running already (often on port 4322). Starting 
 **Deployment:** `.github/workflows/deploy.yml` builds and publishes to GitHub Pages on push to `main`, nightly, and hourly on Tuesdays (new episodes usually land then), so the site picks up new episodes without code changes. The site lives under `base: '/spaell'` in production, but `astro.config.mjs` sets base to `/` when running `astro dev`. Always build internal links with `url()` from `src/lib/links.ts`, never hardcoded `/` paths.
 
 **Pages:**
-- `index.astro`: front page with the latest episode, the «Følg Spæll» social links beside it (there is no site footer; the listen links live only in the header), and below it the full episode grid (`#episoder`, which the «Episoder» menu item links to) with client-side search and filters for year, type and sort.
+- `index.astro`: front page with the latest episode, the «Følg Spæll» social links beside it (there is no site footer; the listen links live only in the header), and below it the full episode grid (`#episoder`, which the «Episoder» menu item links to) with client-side search, a two-handle year-range slider (handles may cross; the span is always min–max) and filters for type and sort.
 - `episode/[slug].astro`: one page per episode via `getStaticPaths`, with JSON-LD. «Forrige/Neste episode» sits at the top and bottom; «Forrige» is the older episode. On desktop the header, description and a side column («Om episoden» tags + chapters) share one grid, so the side column starts level with the cover. Below 900px it falls under the description.
 - `om.astro`: about page.
 
