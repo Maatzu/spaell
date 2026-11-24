@@ -22,19 +22,36 @@ interface PlayOptions {
 
 const label = (active: boolean) => (active ? 'Pause' : 'Spill av');
 
+/** Det avspilleren trenger fra en episode. Brukes av playData og av episodelista avspilleren henter. */
+export function toTrack(episode: Episode): Track {
+  return {
+    id: episode.id,
+    src: episode.audioUrl,
+    title: episode.fullTitle,
+    image: sizedImage(episode.image, 'Small'),
+    href: episodeUrl(episode),
+    duration: episode.duration,
+    chapters: episode.chapters,
+  };
+}
+
+/** Alle episodene som Track, nyeste først (src/pages/episoder.json.ts). Brukes til å spille av neste. */
+export const TRACKS_PATH = 'episoder.json';
+
 /**
  * data-attributtene avspilleren leser når noe med data-play klikkes.
  * Knapper med synlig tekst legger den i et element med data-play-label.
  */
 export function playData(episode: Episode, { start, ariaLabel = false }: PlayOptions = {}) {
+  const track = toTrack(episode);
   return {
-    'data-play': episode.id,
-    'data-src': episode.audioUrl,
-    'data-title': episode.fullTitle,
-    'data-image': sizedImage(episode.image, 'Small'),
-    'data-href': episodeUrl(episode),
-    'data-duration': episode.duration,
-    'data-chapters': episode.chapters.length ? JSON.stringify(episode.chapters) : undefined,
+    'data-play': track.id,
+    'data-src': track.src,
+    'data-title': track.title,
+    'data-image': track.image,
+    'data-href': track.href,
+    'data-duration': track.duration,
+    'data-chapters': track.chapters.length ? JSON.stringify(track.chapters) : undefined,
     'data-start': start,
     'aria-label': ariaLabel ? `${label(false)} ${episode.fullTitle}` : undefined,
   };

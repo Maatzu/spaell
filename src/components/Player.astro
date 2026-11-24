@@ -82,6 +82,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   import { formatTimestamp } from '../lib/format';
   import { markPlaying, readStart, readTrack, type Track } from '../lib/play';
   import { setupChapters } from '../lib/player/chapters';
+  import { olderTrack } from '../lib/player/queue';
   import { trackPlayerSpace } from '../lib/player/space';
   import { setupVolume } from '../lib/player/volume';
   import { store } from '../lib/storage';
@@ -223,8 +224,15 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
       savePosition();
     }
   });
-  audio.addEventListener('ended', () => {
-    if (track) store.set(`pos:${track.id}`, 0);
+  // Når en episode er ferdig, spilles den forrige (eldre) av, med mindre noe annet er startet i mellomtiden.
+  audio.addEventListener('ended', async () => {
+    if (!track) return;
+    const finished = track.id;
+    store.set(`pos:${finished}`, 0);
+    const next = await olderTrack(finished);
+    if (!next || track?.id !== finished || !audio.ended) return;
+    load(next);
+    audio.play();
   });
   window.addEventListener('pagehide', savePosition);
   document.addEventListener('astro:page-load', syncButtons);
