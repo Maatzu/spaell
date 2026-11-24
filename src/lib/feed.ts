@@ -152,6 +152,12 @@ function parseFeed(xml: string): Podcast {
     ep.tags = TAGS[ep.slug] ?? {};
   }
 
+  // Sluggen lages av tittelen, så en endret tittel i feeden gjør at tagsene slutter å matche.
+  // parseFeed kjøres bare én gang per bygg (se getPodcast), så hver advarsel skrives én gang.
+  for (const key of Object.keys(TAGS)) {
+    if (!seen.has(key)) console.warn(`[tags] Advarsel: «${key}» i src/data/tags.ts matcher ingen episode i feeden. Har tittelen endret seg?`);
+  }
+
   return {
     title: decodeEntities(String(channel.title)),
     description: decodeEntities(String(channel.description)),
