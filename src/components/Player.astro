@@ -112,7 +112,20 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     if (track) store.set(`pos:${track.id}`, Math.floor(audio.currentTime));
   }
 
-  function load(next: Track, start?: number) {
+  // Viser avspilleren når en episode er lastet og skjuler den ellers. Den glir opp når den åpnes og
+  // ned når den lukkes (player-open/player-close i global.css). Oppdateringen leser track først når
+  // den kjører, så en episode som startes rett etter lukking ikke blir skjult.
+  function syncVisible(animate = true) {
+    if (root.hidden === !track) return;
+    const update = () => {
+      root.hidden = !track;
+      if (!track) root.classList.remove('is-minimized');
+    };
+    if (animate) withViewTransition(update, track ? 'player-open' : 'player-close');
+    else update();
+  }
+
+  function load(next: Track, start?: number, animate = true) {
     if (track?.id !== next.id) {
       savePosition();
       track = next;
@@ -124,7 +137,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
       range.max = String(next.duration);
       total.textContent = formatTimestamp(next.duration);
       chapters.show(next);
-      root.hidden = false;
+      syncVisible(animate);
       const resumeAt = start ?? store.get<number>(`pos:${next.id}`) ?? 0;
       range.value = String(resumeAt);
       current.textContent = formatTimestamp(resumeAt);
@@ -157,8 +170,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     audio.load();
     store.set('current', null);
     chapters.close();
-    root.hidden = true;
-    root.classList.remove('is-minimized');
+    syncVisible();
     store.set('minimized', false);
     syncButtons();
   }
@@ -241,7 +253,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
 
   // Vis forrige episode (pauset) når siden lastes på nytt.
   const previous = store.get<Track>('current');
-  if (previous) load({ ...previous, duration: previous.duration ?? 0, chapters: previous.chapters ?? [] });
+  if (previous) load({ ...previous, duration: previous.duration ?? 0, chapters: previous.chapters ?? [] }, undefined, false);
 </script>
 
 <style>

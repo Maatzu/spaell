@@ -145,6 +145,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
   height: 100%; object-fit: cover; overflow: clip;
 }
 
+/* Avspilleren glir opp fra bunnen når den åpnes, og ned igjen når den lukkes. Siden står stille. */
+:active-view-transition-type(player-open)::view-transition-old(root),
+:active-view-transition-type(player-open)::view-transition-new(root),
+:active-view-transition-type(player-close)::view-transition-old(root),
+:active-view-transition-type(player-close)::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+:active-view-transition-type(player-open)::view-transition-new(player):only-child {
+  animation: player-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+:active-view-transition-type(player-close)::view-transition-old(player):only-child {
+  animation: player-out 0.25s ease-in both;
+}
+
+@keyframes player-in { from { translate: 0 calc(100% + 24px); } }
+@keyframes player-out { to { translate: 0 calc(100% + 24px); opacity: 0; } }
+
 /* Temabytte tones rolig over. */
 :active-view-transition-type(theme)::view-transition-group(*),
 :active-view-transition-type(theme)::view-transition-old(*),
