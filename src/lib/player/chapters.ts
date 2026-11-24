@@ -56,11 +56,10 @@ export function setupChapters(root: HTMLElement, audio: HTMLAudioElement) {
     const index = Math.max(0, chapterAt(chapters(), time));
     hoverTip.textContent = `${formatTimestamp(time)} · ${chapters()[index].title}`;
     hoverTip.hidden = false;
-    // Hold boblen innenfor tidslinja i begge ender.
+    // Boblen står midt over pekeren, og stopper bare ved kanten av vinduet.
     const half = hoverTip.offsetWidth / 2;
-    const trackBox = trackEl.getBoundingClientRect();
-    const x = Math.min(trackBox.width - half, Math.max(half, e.clientX - trackBox.left));
-    hoverTip.style.left = `${x}px`;
+    const x = Math.min(innerWidth - half - 8, Math.max(half + 8, e.clientX));
+    hoverTip.style.left = `${x - trackEl.getBoundingClientRect().left}px`;
   }
 
   function hideHoverTip() {
