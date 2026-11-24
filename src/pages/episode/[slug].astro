@@ -189,13 +189,14 @@ const jsonLd = {
   }
 
   /* Desktop: «Om episoden» og kapitler står i egen kolonne fra toppen, ved siden av tittelen. */
-  .content { display: grid; grid-template-columns: minmax(0, 1fr) 320px; column-gap: 40px; align-items: start; }
+  /* Rad 2 er 1fr, så en høy sidekolonne (mange kapitler) gjør beskrivelsens rad høyere, ikke tittelens. */
+  .content { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: auto 1fr; column-gap: 40px; align-items: start; }
   header, .prose { grid-column: 1; }
   .aside { grid-column: 2; grid-row: 1 / span 2; }
   .prose { max-width: 68ch; font-size: 1.05rem; }
   /* Smalere: én kolonne i rekkefølgen tittel, beskrivelse, «Om episoden» og kapitler. */
   @media (max-width: 900px) {
-    .content { grid-template-columns: minmax(0, 1fr); }
+    .content { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
     .aside { grid-column: 1; grid-row: auto; margin-top: 40px; }
   }
 
