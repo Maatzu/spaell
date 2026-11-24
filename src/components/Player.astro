@@ -175,6 +175,12 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     syncButtons();
   }
 
+  // Ringen rundt play/pause vises mens lyden lastes, før start eller når den må bufre underveis.
+  function setLoading(loading: boolean) {
+    root.classList.toggle('is-loading', loading);
+    toggle.toggleAttribute('aria-busy', loading);
+  }
+
   function togglePlayback() {
     if (audio.paused) audio.play();
     else audio.pause();
@@ -217,8 +223,11 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   audio.addEventListener('play', () => {
     audio.playbackRate = store.get<number>('speed') ?? 1;
     speedBtn.textContent = `${audio.playbackRate}×`;
+    setLoading(audio.readyState < audio.HAVE_FUTURE_DATA);
     syncButtons();
   });
+  audio.addEventListener('waiting', () => setLoading(true));
+  for (const type of ['playing', 'pause', 'error', 'emptied']) audio.addEventListener(type, () => setLoading(false));
   audio.addEventListener('pause', () => {
     savePosition();
     syncButtons();
@@ -324,6 +333,15 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   .bar button:hover { color: var(--text); background: var(--surface-2); }
   .bar .toggle { background: var(--red); color: var(--accent-ink); display: grid; place-items: center; width: 40px; height: 40px; }
   .bar .toggle:hover { background: var(--red-hover); color: var(--accent-ink); }
+  /* Lasteringen. Den kommer litt forsinket, så den ikke blinker når lyden starter med en gang. */
+  .bar .toggle { position: relative; }
+  .bar .toggle::after {
+    content: ''; position: absolute; inset: -4px; border-radius: 50%; pointer-events: none;
+    border: 2px solid transparent; border-top-color: var(--red); border-right-color: var(--red);
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .is-loading .bar .toggle::after { opacity: 1; transition-delay: 0.2s; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { rotate: 1turn; } }
 
   /* Høyre: kapitler, volum, hastighet og minimer. */
   .side { grid-area: side; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
