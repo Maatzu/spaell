@@ -2,6 +2,7 @@
 import Base from '../../layouts/Base.astro';
 import { Image } from 'astro:assets';
 import PlayButton from '../../components/PlayButton.astro';
+import SpotifyButton from '../../components/SpotifyButton.astro';
 import { getPodcast, type Episode } from '../../lib/feed';
 import { episodeLabel, formatDate, formatDuration, formatTimestamp, sizedImage } from '../../lib/format';
 import { absoluteUrl, episodeUrl, url } from '../../lib/links';
@@ -90,7 +91,10 @@ const jsonLd = {
           <span class={`badge badge-${episode.type}`}>{episodeLabel(episode)}</span>
           <h1>{episode.title}</h1>
           <p class="meta"><time datetime={episode.date}>{formatDate(episode.date)}</time> · {formatDuration(episode.duration)}</p>
-          <PlayButton episode={episode} />
+          <div class="actions">
+            <PlayButton episode={episode} />
+            <SpotifyButton episode={episode} />
+          </div>
         </div>
       </header>
 
@@ -166,6 +170,7 @@ const jsonLd = {
   header img { border-radius: var(--radius); aspect-ratio: 1; object-fit: cover; }
   h1 { margin: 10px 0 6px; font-size: clamp(1.8rem, 4vw, 2.75rem); line-height: 1.1; }
   header .meta { margin: 0 0 18px; }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
   /* Mobil: lite cover ved siden av tittelen, play-knappen i full bredde under. */
   @media (max-width: 640px) {
     .episode { padding-top: 16px; }
@@ -178,7 +183,8 @@ const jsonLd = {
     header .badge, h1, header .meta { grid-column: 2; justify-self: start; }
     h1 { margin: 6px 0 4px; font-size: 1.4rem; }
     header .meta { margin: 0; font-size: 0.8rem; }
-    header :global(.btn) { grid-column: 1 / -1; margin-top: 16px; justify-content: center; }
+    .actions { grid-column: 1 / -1; margin-top: 16px; }
+    .actions :global(.btn) { flex: 1; justify-content: center; }
     .prose { font-size: 1rem; }
   }
 

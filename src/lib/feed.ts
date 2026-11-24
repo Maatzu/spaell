@@ -2,6 +2,7 @@ import { XMLParser } from 'fast-xml-parser';
 import sanitizeHtml from 'sanitize-html';
 import { TAGS, type EpisodeTags } from '../data/tags';
 import { FEED_URL } from './links';
+import { getSpotifyLookup } from './spotify';
 
 export type EpisodeType = 'episode' | 'spaellbreak' | 'spesial';
 
@@ -30,6 +31,8 @@ export interface Episode {
   chapters: Chapter[];
   /** Håndlagde tags fra src/data/tags.ts; tomt for episoder som ikke er tagget. */
   tags: EpisodeTags;
+  /** Episoden på Spotify, eller programsiden hvis den ikke ble funnet. */
+  spotifyUrl: string;
 }
 
 export interface Podcast {
@@ -136,6 +139,7 @@ function parseFeed(xml: string): Podcast {
         title: decodeEntities(String(c.title)),
       })),
       tags: {},
+      spotifyUrl: '',
     };
   });
 
@@ -160,11 +164,17 @@ let cached: Promise<Podcast> | undefined;
 
 /** Henter og tolker feeden én gang per bygg. Feiler bygget hvis feeden ikke kan hentes. */
 export function getPodcast(): Promise<Podcast> {
-  cached ??= fetch(FEED_URL)
-    .then((res) => {
-      if (!res.ok) throw new Error(`Kunne ikke hente RSS-feeden: ${res.status}`);
-      return res.text();
-    })
-    .then(parseFeed);
+  cached ??= Promise.all([
+    fetch(FEED_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Kunne ikke hente RSS-feeden: ${res.status}`);
+        return res.text();
+      })
+      .then(parseFeed),
+    getSpotifyLookup(),
+  ]).then(([podcast, spotifyUrl]) => {
+    for (const ep of podcast.episodes) ep.spotifyUrl = spotifyUrl(ep.fullTitle, ep.date);
+    return podcast;
+  });
   return cached;
 }

@@ -4,13 +4,16 @@ import type { IconName } from './icons';
 export const FEED_URL =
   'https://www.omnycontent.com/d/playlist/d79bdbb3-8eae-4ad2-b1f6-b0bc00cd1540/b0b974e4-d76a-4f77-905a-b3ef00b49619/12340bdf-8da5-4473-88e7-b3ef00b49642/podcast.rss';
 
+export const SPOTIFY_SHOW_ID = '1iKntCOfIHmaBI3Mm2d2vD';
+export const SPOTIFY_SHOW_URL = `https://open.spotify.com/show/${SPOTIFY_SHOW_ID}`;
+
 export const PATREON_URL = 'https://www.patreon.com/lolbua';
 
 type Link = { label: string; href: string; icon: IconName };
 
 export const LISTEN_LINKS: Link[] = [
   { label: 'Apple Podcasts', icon: 'applepodcasts', href: 'https://podcasts.apple.com/no/podcast/sp%C3%A6ll/id1498119699' },
-  { label: 'Spotify', icon: 'spotify', href: 'https://open.spotify.com/show/1iKntCOfIHmaBI3Mm2d2vD' },
+  { label: 'Spotify', icon: 'spotify', href: SPOTIFY_SHOW_URL },
   { label: 'RSS', icon: 'rss', href: FEED_URL },
 ];
 

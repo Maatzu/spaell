@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import PlayButton from '../components/PlayButton.astro';
+import SpotifyButton from '../components/SpotifyButton.astro';
 import EpisodeCard from '../components/EpisodeCard.astro';
 import { Image } from 'astro:assets';
 import { getPodcast } from '../lib/feed';
@@ -41,6 +42,7 @@ const jsonLd = {
         <p class="summary">{latest.summary}</p>
         <div class="actions">
           <PlayButton episode={latest} />
+          <SpotifyButton episode={latest} />
           <a class="btn btn-ghost" href={latestUrl}>Les mer</a>
         </div>
       </div>
