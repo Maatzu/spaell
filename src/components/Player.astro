@@ -225,10 +225,16 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     }
   }
 
-  // Sidene får luft nederst tilsvarende avspillerens høyde; minimert tar den ingen plass.
-  new ResizeObserver(() => {
-    document.documentElement.style.setProperty('--player-h', `${bar.offsetHeight}px`);
-  }).observe(bar);
+  // --player-h er høyden på hele avspilleren. --player-space er luften sidene får nederst, med litt
+  // margin, så innholdet ikke havner rett under kanten. Minimert gir den plass til coverbildet i hjørnet.
+  const sizes = new ResizeObserver(() => {
+    const style = document.documentElement.style;
+    style.setProperty('--player-h', `${bar.offsetHeight}px`);
+    const space = bar.offsetHeight ? bar.offsetHeight + 24 : expandBtn.offsetHeight ? expandBtn.offsetHeight + 32 : 0;
+    style.setProperty('--player-space', `${space}px`);
+  });
+  sizes.observe(bar);
+  sizes.observe(expandBtn);
 
   function setMinimized(minimized: boolean, animate = true) {
     const update = () => {

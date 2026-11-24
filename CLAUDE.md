@@ -35,8 +35,9 @@ The user usually has `astro dev` running already (often on port 4322). Starting 
 
 **Search:** `src/lib/search.ts` owns the front-page search:
 - `searchData(episode)` gives each card its `data-search`/`data-year`/`data-type` attributes (search text is title, description and tags, lowercased). `readEntry()` reads them back.
-- `matcher(filter)` decides whether a card matches the query, year span and type. It is pure, so it runs without the DOM.
-- `tagSearchUrl(tag)` builds the `?q=<tag>#episoder` links on the episode page, and `queryFromUrl()` reads `?q` back on the front page.
+- `matcher(filter, entries)` decides whether a card matches the query, year span and type. It is pure, so it runs without the DOM. It tries levels in order and uses the first one where any card (within years/type) matches: episode number (`120`/`#120`), then title + tags (`data-search`), then also the description (`data-text`). A query that is exactly a tag name must match as whole words.
+- `tagSearchUrl(tag)` builds the `?q=<tag>#episoder` links on the episode page.
+- `filterFromUrl()`/`filterToUrl()` map the filter state to the URL (`q`, `fra`, `til`, `type`, `sortering`; defaults left out). The filter script writes it with `history.replaceState(history.state, …)` (keep the state, Astro stores scroll there), so the search survives going back from an episode page.
 
 The filter script in `index.astro` only updates the page (hide/sort cards, counts, view transitions). Change what matches in `search.ts`, not there.
 
@@ -65,7 +66,7 @@ Player layout:
 - **Full bar:** three areas (now / center / side).
 - **Minimized:** the `.mini` cover icon. Both share `view-transition-name: player`, so only one may be visible at a time.
 - **Mobile (≤760px):** `.center`, `.controls` and `.side` become `display: contents`, and the buttons are placed on a five-column grid.
-- **`--player-h`:** set by a `ResizeObserver` on `.bar`, and drives the page's bottom padding (0 when minimized or closed).
+- **`--player-h` / `--player-space`:** set by a `ResizeObserver` on `.bar` and `.mini`. `--player-h` is the bar's height (0 when minimized or closed). `--player-space` drives the page's bottom padding and `scroll-padding-bottom`: bar height + 24px, or the mini icon + 32px when minimized, 0 when closed.
 
 **Theming:** dark is the default. `data-theme="light"` on `<html>` switches palettes via CSS variables in `src/styles/global.css`. The player deliberately uses the opposite palette (`--player-*` vars, incl. `--player-scheme` for native controls), so it is silver in dark mode and dark in light mode. Check both themes when touching player styles.
 
