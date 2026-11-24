@@ -177,6 +177,7 @@ export const TAGS: Record<string, EpisodeTags> = {
   '150-metal-gear-solid-4': { plattform: ['PlayStation 3'], studio: ['Kojima Productions', 'Konami'], sjanger: ['Snikespill'], serie: ['Metal Gear'] },
   '151-resident-evil-9': { plattform: ['PlayStation 5', 'Xbox Series', 'PC'], studio: ['Capcom'], sjanger: ['Survival horror'], serie: ['Resident Evil'], tema: ['Halloween'] },
   '152-grand-theft-auto-1': { plattform: ['MS-DOS', 'PC', 'PlayStation'], studio: ['DMA Design'], sjanger: ['Action', 'Ovenfra'], serie: ['Grand Theft Auto'] },
+  '153-hidden-gems-til-super-nintendo-del-2': { plattform: ['SNES'], tema: ['Hidden Gems'] },
 
   // Spesialer og SpællBreak
   'ffvii-remake-demo-spesial': { plattform: ['PlayStation 4'], studio: ['Square Enix'], sjanger: ['Action-RPG'], serie: ['Final Fantasy'], tema: ['Demo'] },
