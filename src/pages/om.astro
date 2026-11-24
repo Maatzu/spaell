@@ -5,6 +5,7 @@ import { getPodcast } from '../lib/feed';
 import { sizedImage } from '../lib/format';
 import { LISTEN_LINKS, PATREON_URL, SOCIAL_LINKS } from '../lib/links';
 import LinkIcon from '../components/LinkIcon.astro';
+import hallais from '../assets/hallais.png';
 
 const podcast = await getPodcast();
 const numbered = podcast.episodes.filter((e) => e.number !== null);
@@ -20,7 +21,10 @@ const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.durati
   <article class="wrap about">
     <Image src={sizedImage(podcast.image, 'Medium')} alt="Spæll-logoen" width={240} height={240} densities={[1, 2]} loading="eager" />
     <div class="prose">
-      <h1 class="greeting"><span aria-hidden="true">Hallais!</span><span class="visually-hidden">Om Spæll</span></h1>
+      <h1 class="greeting">
+        <Image src={hallais} alt="" widths={[480, 960]} sizes="(max-width: 720px) 80vw, 480px" loading="eager" />
+        <span class="visually-hidden">Om Spæll</span>
+      </h1>
       <p class="lead">{podcast.description}</p>
       <p>
         Spæll er en norsk spillpodcast med <strong>Adrian</strong> og <strong>Håkon</strong>, ofte med gjester fra
@@ -71,11 +75,13 @@ const totalHours = Math.round(podcast.episodes.reduce((sum, e) => sum + e.durati
   .about img { border-radius: var(--radius); aspect-ratio: 1; object-fit: cover; }
   /* Logoens hvite JPEG-bakgrunn smelter inn i siden i lyst tema. */
   :global([data-theme='light']) .about img { mix-blend-mode: multiply; }
-  .greeting {
-    margin: 0 0 4px; font-size: clamp(2.5rem, 7vw, 4rem); font-weight: 900; font-style: italic; line-height: 1;
-    color: var(--red); -webkit-text-stroke: 2px var(--text); paint-order: stroke fill; letter-spacing: -0.02em;
-    transform: rotate(-3deg); transform-origin: left bottom;
+  /* «HALLAIS» fra Spæll-merchen, med gjennomsiktig bakgrunn; det hvite er innsiden av S-en. */
+  .greeting { margin: 0 0 8px; }
+  .about .greeting img {
+    width: min(100%, 480px); height: auto; max-width: none;
+    border-radius: 0; aspect-ratio: auto; object-fit: contain;
   }
+  :global([data-theme='light']) .about .greeting img { mix-blend-mode: normal; }
   .lead { font-size: 1.2rem; }
   .support {
     margin: 32px 0; padding: 20px 24px; border-radius: var(--radius);
