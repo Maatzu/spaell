@@ -7,6 +7,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
  *   data-play="<id>" data-src data-title data-image data-href data-duration [data-chapters=JSON] [data-start=sekunder]
  * Attributtene lages av playData() og leses av readTrack()/readStart() i src/lib/play.ts,
  * og markPlaying() der bestemmer hvordan hver knapp viser at den spiller.
+ * Kapitler, volum og plassen avspilleren tar nederst på siden ligger i src/lib/player/.
  */
 ---
 
@@ -78,9 +79,11 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
 </div>
 
 <script>
-  import type { Chapter } from '../lib/feed';
   import { formatTimestamp } from '../lib/format';
   import { markPlaying, readStart, readTrack, type Track } from '../lib/play';
+  import { setupChapters } from '../lib/player/chapters';
+  import { trackPlayerSpace } from '../lib/player/space';
+  import { setupVolume } from '../lib/player/volume';
   import { store } from '../lib/storage';
   import { withViewTransition } from '../lib/transition';
 
@@ -88,116 +91,24 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
 
   const root = document.getElementById('player')!;
   const audio = root.querySelector('audio')!;
-  const range = root.querySelector<HTMLInputElement>('input[type=range]')!;
+  const range = root.querySelector<HTMLInputElement>('.scrub input[type=range]')!;
   const current = root.querySelector<HTMLElement>('[data-current]')!;
   const total = root.querySelector<HTMLElement>('[data-duration]')!;
   const toggle = root.querySelector<HTMLButtonElement>('[data-toggle]')!;
   const speedBtn = root.querySelector<HTMLButtonElement>('[data-speed]')!;
-  const chapterLabel = root.querySelector<HTMLElement>('[data-chapter]')!;
-  const markers = root.querySelector<HTMLElement>('[data-markers]')!;
-  const chaptersToggle = root.querySelector<HTMLButtonElement>('[data-chapters-toggle]')!;
-  const chapterList = root.querySelector<HTMLOListElement>('[data-chapter-list]')!;
-  const trackEl = root.querySelector<HTMLElement>('.track')!;
   const bar = root.querySelector<HTMLElement>('[data-bar]')!;
   const minimizeBtn = root.querySelector<HTMLButtonElement>('[data-minimize]')!;
   const expandBtn = root.querySelector<HTMLButtonElement>('[data-expand]')!;
   const closeBtn = root.querySelector<HTMLButtonElement>('[data-close]')!;
-  const hoverTip = root.querySelector<HTMLElement>('[data-hover-tip]')!;
-  const volumeBox = root.querySelector<HTMLElement>('[data-volume]')!;
-  const muteBtn = root.querySelector<HTMLButtonElement>('[data-mute]')!;
-  const volumeRange = root.querySelector<HTMLInputElement>('[data-volume-range]')!;
   let track: Track | null = null;
   let lastSaved = 0;
-  let activeChapter = -1;
 
-  /** Indeksen til kapittelet som spilles på tidspunktet, eller -1 før det første. */
-  function chapterAt(chapters: Chapter[], time: number): number {
-    let index = -1;
-    for (let i = 0; i < chapters.length; i++) if (chapters[i].start <= time) index = i;
-    return index;
-  }
-
-  /** Varigheten fra lydfila når den er lastet, ellers fra feeden. */
-  function knownDuration(): number {
-    return audio.duration || track?.duration || 0;
-  }
+  const chapters = setupChapters(root, audio);
+  setupVolume(root, audio);
+  trackPlayerSpace(bar, expandBtn);
 
   function savePosition() {
     if (track) store.set(`pos:${track.id}`, Math.floor(audio.currentTime));
-  }
-
-  function renderChapters() {
-    const chapters = track?.chapters ?? [];
-    chaptersToggle.hidden = chapters.length === 0;
-    setChapterListOpen(false);
-    chapterList.replaceChildren(
-      ...chapters.map((c, i) => {
-        const li = document.createElement('li');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.index = String(i);
-        const ts = document.createElement('span');
-        ts.className = 'ts';
-        ts.textContent = formatTimestamp(c.start);
-        btn.append(ts, c.title);
-        li.append(btn);
-        return li;
-      }),
-    );
-    renderMarkers();
-    activeChapter = -1;
-    updateChapter();
-  }
-
-  function renderMarkers() {
-    const chapters = track?.chapters ?? [];
-    const duration = knownDuration();
-    markers.replaceChildren(
-      ...(duration > 0 ? chapters.slice(1) : []).map((c) => {
-        const tick = document.createElement('span');
-        tick.style.left = `${(c.start / duration) * 100}%`;
-        return tick;
-      }),
-    );
-  }
-
-  // Viser kapittelet (og tidspunktet) under musepekeren når man holder over tidslinja.
-  function showHoverTip(e: PointerEvent) {
-    const chapters = track?.chapters ?? [];
-    const duration = knownDuration();
-    if (e.pointerType === 'touch' || chapters.length === 0 || duration <= 0) return hideHoverTip();
-    // Samme innrykk som markørene, så posisjonen stemmer med tommelen på slideren.
-    const box = markers.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
-    const time = ratio * duration;
-    const index = Math.max(0, chapterAt(chapters, time));
-    hoverTip.textContent = `${formatTimestamp(time)} · ${chapters[index].title}`;
-    hoverTip.hidden = false;
-    // Hold boblen innenfor tidslinja i begge ender.
-    const half = hoverTip.offsetWidth / 2;
-    const trackBox = trackEl.getBoundingClientRect();
-    const x = Math.min(trackBox.width - half, Math.max(half, e.clientX - trackBox.left));
-    hoverTip.style.left = `${x}px`;
-  }
-
-  function hideHoverTip() {
-    hoverTip.hidden = true;
-  }
-
-  function updateChapter(time = audio.currentTime) {
-    const chapters = track?.chapters ?? [];
-    const index = chapterAt(chapters, time);
-    if (index === activeChapter) return;
-    activeChapter = index;
-    // Første kapittel heter ofte det samme som episoden; da viser vi det ikke to ganger.
-    const title = index >= 0 ? chapters[index].title : '';
-    chapterLabel.textContent = title === track?.title ? '' : title;
-    chapterList.querySelectorAll('button').forEach((b, i) => b.classList.toggle('is-active', i === index));
-  }
-
-  function setChapterListOpen(open: boolean) {
-    chapterList.hidden = !open;
-    chaptersToggle.setAttribute('aria-expanded', String(open));
   }
 
   function load(next: Track, start?: number) {
@@ -211,37 +122,22 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
       root.querySelector('.title')!.textContent = next.title;
       range.max = String(next.duration);
       total.textContent = formatTimestamp(next.duration);
-      renderChapters();
+      chapters.show(next);
       root.hidden = false;
       const resumeAt = start ?? store.get<number>(`pos:${next.id}`) ?? 0;
       range.value = String(resumeAt);
       current.textContent = formatTimestamp(resumeAt);
-      updateChapter(resumeAt);
+      chapters.update(resumeAt);
       audio.addEventListener('loadedmetadata', () => (audio.currentTime = resumeAt), { once: true });
     } else if (start !== undefined) {
       audio.currentTime = start;
     }
   }
 
-  // --player-h er høyden på hele avspilleren. --player-space er luften sidene får nederst, med litt
-  // margin, så innholdet ikke havner rett under kanten. Minimert gir den plass til coverbildet i hjørnet.
-  function updateSpace() {
-    const style = document.documentElement.style;
-    style.setProperty('--player-h', `${bar.offsetHeight}px`);
-    const space = bar.offsetHeight ? bar.offsetHeight + 24 : expandBtn.offsetHeight ? expandBtn.offsetHeight + 32 : 0;
-    style.setProperty('--player-space', `${space}px`);
-  }
-  const sizes = new ResizeObserver(updateSpace);
-  sizes.observe(bar);
-  sizes.observe(expandBtn);
-  // ClientRouter fjerner alle attributter på <html> ved sidebytte, også style med variablene over.
-  document.addEventListener('astro:after-swap', updateSpace);
-
   function setMinimized(minimized: boolean, animate = true) {
     const update = () => {
       root.classList.toggle('is-minimized', minimized);
-      setChapterListOpen(false);
-      hideHoverTip();
+      chapters.close();
     };
     store.set('minimized', minimized);
     if (!animate) return update();
@@ -259,8 +155,7 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     audio.removeAttribute('src');
     audio.load();
     store.set('current', null);
-    setChapterListOpen(false);
-    hideHoverTip();
+    chapters.close();
     root.hidden = true;
     root.classList.remove('is-minimized');
     store.set('minimized', false);
@@ -302,55 +197,9 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
     store.set('speed', next);
   });
   range.addEventListener('input', () => (audio.currentTime = Number(range.value)));
-
-  // Volumet huskes mellom besøk. Dempet vises som volum 0, men det forrige volumet beholdes til lyden slås på igjen.
-  function syncVolume() {
-    const silent = audio.muted || audio.volume === 0;
-    volumeBox.classList.toggle('is-muted', silent);
-    volumeRange.value = String(silent ? 0 : audio.volume);
-    muteBtn.setAttribute('aria-label', silent ? 'Slå på lyden' : 'Slå av lyden');
-  }
-  volumeRange.addEventListener('input', () => {
-    const volume = Number(volumeRange.value);
-    audio.muted = volume === 0;
-    if (volume > 0) audio.volume = volume;
-    syncVolume();
-  });
-  muteBtn.addEventListener('click', () => {
-    if (audio.volume === 0) audio.volume = 1;
-    audio.muted = !audio.muted;
-  });
-  audio.addEventListener('volumechange', () => {
-    store.set('volume', audio.volume);
-    store.set('muted', audio.muted);
-    syncVolume();
-  });
-  audio.volume = Math.min(1, Math.max(0, Number(store.get<number>('volume') ?? 1) || 0));
-  audio.muted = store.get<boolean>('muted') ?? false;
-  syncVolume();
-
   minimizeBtn.addEventListener('click', () => setMinimized(true));
   expandBtn.addEventListener('click', () => setMinimized(false));
   closeBtn.addEventListener('click', close);
-  trackEl.addEventListener('pointermove', showHoverTip);
-  trackEl.addEventListener('pointerleave', hideHoverTip);
-  chaptersToggle.addEventListener('click', () => setChapterListOpen(chapterList.hidden));
-  chapterList.addEventListener('click', (e) => {
-    const btn = (e.target as Element).closest<HTMLButtonElement>('button[data-index]');
-    if (!btn || !track) return;
-    audio.currentTime = track.chapters[Number(btn.dataset.index)].start;
-    audio.play();
-    setChapterListOpen(false);
-  });
-  document.addEventListener('click', (e) => {
-    if (!chapterList.hidden && !(e.target as Element).closest('.chapters-menu')) setChapterListOpen(false);
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !chapterList.hidden) {
-      setChapterListOpen(false);
-      chaptersToggle.focus();
-    }
-  });
 
   audio.addEventListener('play', () => {
     audio.playbackRate = store.get<number>('speed') ?? 1;
@@ -364,18 +213,19 @@ import PlayPauseIcon from './PlayPauseIcon.astro';
   audio.addEventListener('loadedmetadata', () => {
     range.max = String(Math.floor(audio.duration));
     total.textContent = formatTimestamp(audio.duration);
-    renderMarkers();
   });
   audio.addEventListener('timeupdate', () => {
     range.value = String(Math.floor(audio.currentTime));
     current.textContent = formatTimestamp(audio.currentTime);
-    updateChapter();
+    chapters.update();
     if (Math.abs(audio.currentTime - lastSaved) > 5) {
       lastSaved = audio.currentTime;
       savePosition();
     }
   });
-  audio.addEventListener('ended', () => store.set(`pos:${track?.id}`, 0));
+  audio.addEventListener('ended', () => {
+    if (track) store.set(`pos:${track.id}`, 0);
+  });
   window.addEventListener('pagehide', savePosition);
   document.addEventListener('astro:page-load', syncButtons);
 
